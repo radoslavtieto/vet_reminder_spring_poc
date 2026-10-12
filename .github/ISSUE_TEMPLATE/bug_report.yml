@@ -1,0 +1,48 @@
+name: Bug report
+description: Report a reproducible defect in a VetSync service or its development workflow.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Do not include real personal or clinical data, secrets, tokens, or production identifiers."
+  - type: dropdown
+    id: service
+    attributes:
+      label: Affected service
+      options:
+        - pms-api
+        - sync-service
+        - action-engine
+        - CI/CD or developer tooling
+        - Unsure
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead? Remove sensitive data from logs.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Include safe, minimal steps and relevant synthetic test data.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, JDK, Maven, and service version/commit where relevant.
+    validations:
+      required: false

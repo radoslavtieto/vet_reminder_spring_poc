@@ -1,0 +1,49 @@
+name: Feature request
+description: Propose a bounded behavior or developer-workflow improvement.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: "Do not include real personal or clinical data, secrets, tokens, or production identifiers."
+  - type: dropdown
+    id: service
+    attributes:
+      label: Owning service or area
+      options:
+        - pms-api
+        - sync-service
+        - action-engine
+        - Cross-service contract
+        - CI/CD or developer tooling
+        - Unsure
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What user or operational need is not met?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the desired outcome without prescribing unnecessary implementation details.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable outcomes and important edge cases.
+    validations:
+      required: true
+  - type: textarea
+    id: decisions
+    attributes:
+      label: Compatibility and open decisions
+      description: Note API/event compatibility, data ownership, or unresolved choices.
+    validations:
+      required: false
