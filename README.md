@@ -2,7 +2,7 @@
 
 A proof of concept for a **near-real-time synchronisation pipeline** between a veterinary Practice Management System (PMS) and a downstream Action Engine, built with **Java + Spring Boot**, developed **test-first (TDD)**, hosted on **Azure**, and runnable locally on **Windows 11** and **Ubuntu**.
 
-> **How to use this file:** this is the source of truth for humans and for the Claude Code agent. Read sections 1–3 first, then work through the roadmap (section 12) one phase at a time. Section 14 lists open decisions and things that must be verified rather than assumed.
+> **How to use this file:** this is the source of truth for humans and coding agents. Read sections 1–3 first, then work through the roadmap (section 12) one phase at a time. Section 14 lists open decisions and things that must be verified rather than assumed.
 
 ---
 
@@ -12,8 +12,8 @@ A proof of concept for a **near-real-time synchronisation pipeline** between a v
 - Three independently deployable Spring Boot applications with clear contracts between them.
 - Test-driven development from the first line of code (red → green → refactor).
 - Three environments: `local`, `uat`, `prod`, with the same code and different configuration.
-- Runs on Windows 11 and Ubuntu with the same commands (Docker + Maven Wrapper).
-- Agent-friendly repo: Claude Code CLI can build, test, and extend it safely.
+- Runs on Windows 11 and Ubuntu using Docker and Maven.
+- Agent-friendly repo: coding agents can build, test, and extend it safely.
 
 **Non-goals (for the POC)**
 - Real clinical correctness, real medication catalogues, real e-prescription integrations.
@@ -51,7 +51,7 @@ flowchart LR
 
 | # | App | Role | Data store |
 |---|-----|------|-----------|
-| 1 | `pms-api` | Master node. CRUD for clinics, owners, pets, visits, prescriptions, invoices. Writes audit rows. | MySQL (one schema per region) |
+| 1 | `pms-api` | Provides region-scoped REST CRUD, tenant-aware persistence, and trigger-written audit tables. | MySQL (one shared schema, `tenant_id`) |
 | 2 | `sync-service` | Reads audit tables and time-window queries, tracks progress, deduplicates, publishes events. | NoSQL (pointers, leases, dedupe) |
 | 3 | `action-engine` | Consumes events, maps them into **its own domain**, decides and dispatches actions. | PostgreSQL |
 
@@ -65,7 +65,7 @@ flowchart LR
 |---------|--------|-------|
 | Language | Java 21 (LTS) | Java 25 is also LTS; stay on 21 unless there is a reason to move. Verify current guidance. |
 | Framework | Spring Boot 3.5.x or newer | **Pin one version in the parent POM; verify the current stable release before starting.** |
-| Build | Maven multi-module + Maven Wrapper (`./mvnw`, `mvnw.cmd`) | Identical on Windows and Ubuntu. |
+| Build | Maven multi-module | Each GitHub Actions workflow installs Maven 3.9.9; the Maven Wrapper remains a scaffold follow-up. |
 | Source DB | MySQL 8.4 LTS | Flyway migrations. |
 | Sync state | MongoDB locally, Azure Cosmos DB for MongoDB API in UAT/PROD | See open decision D3. |
 | Messaging | Azure Service Bus (queue or topic) | Local: Service Bus emulator or RabbitMQ behind an interface. See D4. |
@@ -85,41 +85,58 @@ flowchart LR
 ```
 vetsync-poc/
 ├── README.md                     ← this file
-├── CLAUDE.md                     ← short agent rules (copy of section 13)
-├── .gitattributes                ← "* text=auto eol=lf" (Windows/Ubuntu line endings)
-├── pom.xml                       ← parent POM (dependency management, plugins)
-├── mvnw / mvnw.cmd
-├── libs/
-│   └── sync-contracts/           ← event envelope + payload DTOs + JSON schemas (no Spring)
+├── AGENTS.md                     ← instructions for coding agents
+├── CONTRIBUTING.md
+├── SECURITY.md
+├── pom.xml                       ← Maven reactor and shared dependency management
 ├── services/
-│   ├── pms-api/
-│   ├── sync-service/
-│   └── action-engine/
-├── infra/
-│   ├── docker/                   ← docker-compose.yml, init scripts, emulator config
-│   └── bicep/                    ← main.bicep + params: local-n/a, uat, prod
-├── docs/
-│   ├── adr/                      ← architecture decision records (one file per decision)
-│   └── api/                      ← generated OpenAPI
-├── .github/workflows/
-└── .claude/
-    ├── settings.json             ← allowed commands
-    └── commands/                 ← reusable slash commands (e.g. /tdd-next)
+│   ├── pms-api/                  ← REST API and MySQL-facing adapters
+│   ├── sync-service/             ← polling worker and event publisher
+│   └── action-engine/            ← event consumer, rules, and dispatch adapters
+└── .github/
+    ├── copilot-instructions.md
+    ├── agents/                   ← planner, implementer, read-only reviewer
+    ├── instructions/             ← path-specific Java, workflow, and Markdown guidance
+    ├── prompts/                  ← reusable task prompts
+    ├── skills/                   ← repeatable development workflows
+    ├── ISSUE_TEMPLATE/
+    ├── PULL_REQUEST_TEMPLATE.md
+    └── workflows/                ← one CI/CD workflow per service
 ```
 
-Base package: `com.vetsync.<service>` (rename to your organisation's domain).
+Base package: `com.vetsync.<service>` (rename to your organisation's domain). The three Spring Boot applications are separate Maven modules and can be built independently with `mvn -pl services/<module> -am verify`.
 
-Each service uses a **hexagonal layout**, enforced by ArchUnit tests:
+Each service has its own hexagonal boundary and deployable container image:
 
 ```
-com.vetsync.pms
-├── domain/          ← entities, value objects, domain services (no Spring, no JPA annotations if possible)
-├── application/     ← use cases, ports (interfaces)
-├── adapter/
-│   ├── in/web/      ← REST controllers, request/response DTOs
-│   └── out/persistence/  ← JPA/JDBC repositories implementing ports
+services/pms-api/src/main/java/com/vetsync/pms/
+├── domain/                  ← PMS entities and business rules
+├── application/             ← use cases and ports
+├── adapter/in/web/
+│   ├── controller/          ← one controller per resource
+│   └── dto/                 ← request/response DTOs grouped by resource
+├── adapter/out/persistence/ ← MySQL adapters
+└── config/                  ← Spring wiring
+
+services/sync-service/src/main/java/com/vetsync/sync/
+├── domain/                  ← stream and synchronization rules
+├── application/             ← poll/sync use cases and ports
+├── adapter/in/scheduler/    ← timer and job entry points
+├── adapter/out/mysql/       ← read-only PMS source adapter
+├── adapter/out/nosql/       ← progress and deduplication state
+├── adapter/out/messaging/   ← event publisher
+└── config/
+
+services/action-engine/src/main/java/com/vetsync/action/
+├── domain/                  ← action-engine-owned model and rules
+├── application/             ← event handling and dispatch use cases
+├── adapter/in/messaging/    ← event consumer and contract mapping
+├── adapter/out/persistence/ ← PostgreSQL adapters
+├── adapter/out/channel/     ← email, SMS, and staff-task channels
 └── config/
 ```
+
+Each workflow builds and tests only its service module (including required Maven modules), then offers an opt-in UAT deployment for a pre-provisioned Azure Container App. Deployment is available only when manually dispatching a workflow with `deploy_uat` enabled. Configure `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_SUBSCRIPTION_ID` as `uat` environment secrets, and `AZURE_RESOURCE_GROUP`, `AZURE_ACR_NAME`, `AZURE_ACR_LOGIN_SERVER`, and `AZURE_CONTAINER_APP_NAME` as `uat` environment variables. The GitHub OIDC identity must have permission to push to ACR and update the target Container App.
 
 ---
 
@@ -145,28 +162,36 @@ Rules:
 **Prerequisites**
 - JDK 21, Git
 - Docker: **Docker Desktop with WSL2 backend** on Windows 11, Docker Engine on Ubuntu (Testcontainers needs a working Docker daemon on both)
-- Nothing else. Use `./mvnw` (Ubuntu / Git Bash) or `mvnw.cmd` (PowerShell), not a globally installed Maven.
+- Maven 3.9.9 (until the Maven Wrapper is added in Phase 0).
 
 **Commands (same on both OSes, apart from the wrapper name)**
 
 ```bash
 docker compose -f infra/docker/docker-compose.yml up -d     # MySQL, Postgres, Mongo, messaging, Mailpit
-./mvnw clean verify                                         # all unit + integration tests
-./mvnw -pl services/pms-api spring-boot:run -Dspring-boot.run.profiles=local
-./mvnw -pl services/sync-service spring-boot:run -Dspring-boot.run.profiles=local
-./mvnw -pl services/action-engine spring-boot:run -Dspring-boot.run.profiles=local
+mvn clean verify                                         # all unit + integration tests
+mvn -pl services/pms-api spring-boot:run -Dspring-boot.run.profiles=local
+mvn -pl services/sync-service spring-boot:run -Dspring-boot.run.profiles=local
+mvn -pl services/action-engine spring-boot:run -Dspring-boot.run.profiles=local
 ```
+
+Local-only database credentials are declared in Compose for convenience; do not reuse them outside development. Stop the dependencies with `docker compose -f infra/docker/docker-compose.yml down` (add `-v` to remove their local data).
 
 **Local infrastructure (docker-compose)**
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| MySQL 8.4 | 3306 | Six regional schemas, created by init script + Flyway |
+| MySQL 8.4 | 3306 | One shared schema, created by Flyway |
 | PostgreSQL | 5432 | Action engine DB |
 | MongoDB | 27017 | Sync state |
-| Messaging emulator | 5672 | See D4 |
+| RabbitMQ | 5672 (AMQP), 15672 (management UI) | Local messaging adapter |
 | Mailpit | 8025 (UI), 1025 (SMTP) | Catches outbound emails from the dispatcher |
-| pms-api / sync-service / action-engine | 8081 / 8082 / 8083 | Spring Boot apps |
+| `pms-api` | 8081 | REST API; workers have no HTTP listener in the initial scaffold |
+
+### Azure foundation (Terraform)
+
+`infra/terraform/main.tf` provisions a development resource group, private networking for Container Apps and MySQL, an Azure Container Registry, Container Apps environment, MySQL Flexible Server, Service Bus queue, Key Vault, Log Analytics, and Application Insights. It does not deploy application containers. Cosmos DB and PostgreSQL are not provisioned yet because their use is still undecided or not implemented in the current services.
+
+From `infra/terraform`, run `terraform init` and `terraform plan`; `terraform apply` provisions billable Azure resources. Terraform uses the active Azure CLI identity and prompts for the required MySQL administrator password. State files can contain sensitive values, so keep the local state private and configure a secured remote backend before collaborating or using this for production.
 
 **Cross-platform rules for the agent and humans:**
 - No bash-only or PowerShell-only scripts in the critical path. Use Maven, Docker Compose and Java.
@@ -180,26 +205,25 @@ docker compose -f infra/docker/docker-compose.yml up -d     # MySQL, Postgres, M
 
 ### 7.1 Multi-tenancy model
 
-Six tenants, one per Bulgarian planning region. Proposed default: **one MySQL server, one schema per region, identical DDL** (see D1).
+Six tenants, one per Bulgarian planning region, share **one MySQL schema**. Every PMS business row and audit row carries a `tenant_id` (`SW`, `SE`, `SC`, `NE`, `NW`, or `NC`); tenant-scoped unique keys and composite foreign keys keep tenant-owned records separate. The PMS database adapter, Flyway schema, and region-to-tenant API resolution are implemented in `services/pms-api`; sync polling remains future work.
 
-| Tenant code | Region | Schema |
-|-------------|--------|--------|
-| `SW` | South West | `pms_sw` |
-| `SE` | South East | `pms_se` |
-| `SC` | South Central | `pms_sc` |
-| `NE` | North East | `pms_ne` |
-| `NW` | North West | `pms_nw` |
-| `NC` | North Central | `pms_nc` |
+The PMS datasource is configured with `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD`; these are required at runtime and have no checked-in defaults.
 
-- Flyway runs the same migrations against all six schemas.
-- The API resolves the tenant from the URL (`/api/v1/{region}/...`) and routes to the right DataSource (`AbstractRoutingDataSource` or a tenant-aware connection provider).
-- A clinic belongs to exactly one region. A request for a clinic outside its region returns `404`.
-- The sync service iterates over all six tenants, with its own pointer per tenant.
+| Tenant code | Region |
+|-------------|--------|
+| `SW` | South West |
+| `SE` | South East |
+| `SC` | South Central |
+| `NE` | North East |
+| `NW` | North West |
+| `NC` | North Central |
 
-### 7.2 Example schema (identical in each regional schema)
+### 7.2 Shared-schema business tables
+
+Flyway migrations under `services/pms-api/src/main/resources/db/migration` are the schema source of truth; Hibernate schema auto-DDL is disabled. The migration defines the 14 business tables sketched below in the shared schema; each has `tenant_id` and the common business metadata.
 
 Conventions for every business table:
-- `id BIGINT AUTO_INCREMENT` primary key + `public_id CHAR(36)` UUID (unique). The `public_id` is the cross-system identifier.
+- `id BIGINT AUTO_INCREMENT` primary key + `public_id CHAR(36)` UUID (unique per tenant). The `public_id` is the cross-system identifier.
 - `created_at`, `updated_at` (`TIMESTAMP(6)`), `version BIGINT` (optimistic locking, also used as the source version in sync events).
 - **Soft delete** (`deleted_at`) so deletions are visible to the sync layer.
 - Money as `DECIMAL(12,2)`, currency `EUR` (Bulgaria joined the euro area on 1 Jan 2026; keep the currency as a column anyway).
@@ -225,7 +249,7 @@ erDiagram
   INVOICE ||--o{ PAYMENT : "settled by"
 ```
 
-**Business tables (sketch. Types and indexes are a starting point, not final)**
+**Business tables**
 
 | Table | Key columns |
 |-------|-------------|
@@ -233,13 +257,13 @@ erDiagram
 | `staff` | clinic_id, role (`VET`, `NURSE`, `RECEPTION`, `ADMIN`), full_name, license_no, active |
 | `client` (owner) | registered_clinic_id, first_name, last_name, email, phone, address, city, preferred_contact, gdpr_consent_at |
 | `species` / `breed` | code, name; breed.species_id |
-| `patient` (pet) | client_id, clinic_id, name, species_id, breed_id, sex, birth_date, microchip_no (unique), neutered, weight_kg, status (`ACTIVE`, `DECEASED`, `TRANSFERRED`), deceased_at |
+| `patient` (pet) | client_id, clinic_id, name, species_id, breed_id, sex, birth_date, microchip_no (unique per tenant), neutered, weight_kg, status (`ACTIVE`, `DECEASED`, `TRANSFERRED`), deceased_at |
 | `visit` | patient_id, clinic_id, vet_id, visit_type, status (`SCHEDULED`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`), scheduled_at, started_at, completed_at, reason, diagnosis, notes |
 | `medical_record_entry` | patient_id, visit_id (nullable), entry_type (`DIAGNOSIS`, `VACCINATION`, `ALLERGY`, `PROCEDURE`, `NOTE`), description, recorded_at, recorded_by |
 | `medication` | code, name, form, strength, controlled (bool). Small synthetic catalogue |
 | `prescription` | patient_id, visit_id, vet_id, status (`ACTIVE`, `EXPIRED`, `CANCELLED`, `FULFILLED`), issued_on, valid_until, notes |
 | `prescription_item` | prescription_id, medication_id, dosage, frequency, duration_days, quantity, refills_allowed |
-| `invoice` | clinic_id, client_id, visit_id, invoice_no (unique per clinic), status (`DRAFT`, `ISSUED`, `PARTIALLY_PAID`, `PAID`, `VOID`), issued_on, due_on, currency, total_amount, paid_amount |
+| `invoice` | clinic_id, client_id, visit_id, invoice_no (unique per clinic and tenant), status (`DRAFT`, `ISSUED`, `PARTIALLY_PAID`, `PAID`, `VOID`), issued_on, due_on, currency, total_amount, paid_amount |
 | `invoice_line` | invoice_id, description, quantity, unit_price, vat_rate |
 | `payment` | invoice_id, paid_at, amount, method (`CASH`, `CARD`, `BANK_TRANSFER`) |
 
@@ -254,7 +278,7 @@ Separate audit tables per stream, so the sync service can poll each independentl
 | `audit_invoice` | invoice, invoice_line, payment | invoices |
 | `audit_master_data` | clinic, client, patient | master-data events |
 
-Common shape:
+The four MySQL audit tables and write triggers are implemented by Flyway. Each table adds `tenant_id` to this common shape:
 
 ```sql
 audit_id      BIGINT AUTO_INCREMENT PRIMARY KEY,   -- "added order"
@@ -269,7 +293,7 @@ payload       JSON         NOT NULL,               -- snapshot of the row after 
 INDEX idx_changed_at (changed_at)
 ```
 
-**How rows get written:** MySQL triggers (captures every write, including ones that bypass the API) or application-level writes in the same transaction. Default proposal: **triggers** (see D2).
+**How rows get written:** MySQL `AFTER INSERT` and `AFTER UPDATE` triggers capture writes, including writes that bypass the API. A first soft delete (`deleted_at` changing from `NULL` to a timestamp) is emitted as `DELETE`; later updates are emitted as `UPDATE`. The row snapshot includes tenant and business columns, and the triggers use the connection session variable `@pms_changed_by` when set. The PMS API writes business tables through tenant-scoped repositories; the sync poller is future work. Audit tables are not exposed as API write endpoints.
 
 > ⚠️ **Ordering caveat, read this before writing the poller.**
 > `AUTO_INCREMENT` ids are assigned at insert time, not commit time. Transaction A can get `audit_id=100` and commit *after* transaction B got `101` and committed. A poller that reads "everything > 100" right after B commits will **permanently skip row 100**.
@@ -280,25 +304,23 @@ INDEX idx_changed_at (changed_at)
 
 ### 7.4 REST API (Spring Boot)
 
-Base path: `/api/v1/{region}` where `{region}` ∈ `sw|se|sc|ne|nw|nc`. JSON, OpenAPI documented (springdoc), RFC 7807 problem details for errors, optimistic locking via `ETag` / `If-Match`.
+Base path: `/api/v1/{region}` where `{region}` is one of the lowercase codes `sw|se|sc|ne|nw|nc`, mapped to tenant codes `SW|SE|SC|NE|NW|NC`. APIs use JSON DTOs, request validation, `201 Created` with `Location` for creates, `404` for missing or wrong-tenant resources/parents, and `409` for database constraint conflicts. Validation errors return `400`. `DELETE` soft-deletes business rows.
 
 | Resource | Operations |
 |----------|-----------|
-| `/clinics` | CRUD |
-| `/clinics/{id}/staff` | CRUD |
-| `/clients` | CRUD, search by name/phone/email |
-| `/clients/{id}/patients` | list, create |
-| `/patients` | CRUD, search by microchip, transfer to another clinic |
-| `/patients/{id}/history` | list / add medical record entries |
-| `/patients/{id}/visits` | list, schedule |
-| `/visits/{id}` | get, update, `POST /start`, `POST /complete`, `POST /cancel` |
-| `/visits/{id}/prescriptions` | list, create |
-| `/prescriptions/{id}` | get, `POST /cancel`, `POST /renew` |
-| `/invoices` | create from visit, get, list (filter by status, date range), `POST /issue`, `POST /void` |
-| `/invoices/{id}/payments` | list, register payment |
-| `/species`, `/breeds`, `/medications` | read + admin write |
+| `/clinics`, `/staff`, `/clients`, `/patients`, `/visits`, `/prescriptions`, `/invoices` | list, get, create, update, soft-delete |
+| `/clinics/{clinicId}/staff` | list and create staff for a clinic |
+| `/clients/{clientId}/patients` | list and create patients for a client |
+| `/patients/{patientId}/history` | list/add medical record entries; nested entry GET |
+| `/patients/{patientId}/visits` | list and create patient visits |
+| `/visits/{visitId}/prescriptions` | list and create prescriptions for a visit |
+| `/invoices/{invoiceId}/payments` | list/register payments; nested payment GET |
 
-Business rules to cover with tests first: a patient must have exactly one owner; a completed visit is immutable except via addendum entries; a prescription's `valid_until` ≥ `issued_on`; an invoice's `paid_amount` never exceeds `total_amount`; invoices become `PAID` only when fully settled; a controlled medication requires a vet with a licence number.
+Client listing supports a simple `q` match over name, phone, or email; patient listing supports exact `microchip`; invoice listing supports `status`. Nested creation verifies that referenced parents and related records belong to the requested tenant and match the path parent. Payment registration checks the invoice balance and updates its paid amount/status.
+
+Authentication, OpenAPI documentation, ETag/If-Match optimistic concurrency, clinic transfer workflows, visit state-transition actions, invoice issue/void actions, species/breed/medication catalog endpoints, and prescription-item management are not implemented by this API yet.
+
+The current API validates tenant/parent ownership, required fields and enum values, prescription date order, invoice paid totals, and payment balance. More involved workflow rules—such as immutable completed visits, medication catalogue/item management, and controlled-medication licensing—remain future work.
 
 **Seed data:** a Java-based synthetic data generator (e.g. Datafaker), profile `local` only, configurable volume (e.g. 50 clinics, 100k clients, 150k pets across regions) to make "big database" tests realistic.
 
@@ -461,22 +483,24 @@ Per environment (`uat`, `prod`), one resource group:
 | Key Vault + managed identities | Secrets and access |
 | Application Insights + Log Analytics | Logs, traces, metrics, alerts |
 
-Pipeline (GitHub Actions): `build & test (mvnw verify)` → `build image` → `push to ACR` → `deploy UAT` → `smoke tests` → `manual approval` → `deploy PROD`. Deploy infra with Bicep from `infra/bicep`. Use OIDC federation between GitHub and Azure (no long-lived credentials).
+Pipeline target (GitHub Actions): `build & test` → `build image` → `push to ACR` → `deploy UAT` → `smoke tests` → `manual approval` → `deploy PROD`. The current per-service workflows implement build/test and an opt-in UAT deployment to pre-provisioned resources; infra provisioning, smoke tests, production promotion, and OIDC configuration remain follow-up work.
 
 ---
 
 ## 12. Roadmap: start with the initial layer of each app
 
-Each phase ends green (`./mvnw clean verify`) and merged. Start each task by writing the failing test named in *First tests*.
+Each phase should end green (`mvn clean verify`) and merged. Start each task by writing the failing test named in *First tests*.
 
 **Phase 0: Scaffold**
-- Parent POM, three modules + `sync-contracts`, Maven Wrapper, `.gitattributes`, docker-compose, `CLAUDE.md`, CI running `verify`.
-- *First tests:* each app's context loads; ArchUnit skeleton passes.
+- Initial parent POM and three Spring Boot service modules, hexagonal package boundaries, per-service Dockerfiles and GitHub Actions workflows are in place.
+- Coding-agent guidance, GitHub Copilot agents/prompts/skills, and contribution templates are in place.
+- Remaining: `sync-contracts`, Maven Wrapper, `.gitattributes`, docker-compose, and ArchUnit skeleton.
+- *First tests:* each app's context loads (starter tests included); ArchUnit skeleton passes.
 
 **Phase 1: PMS layer 1**
-- Flyway migrations for one tenant schema, then all six. Tenant routing.
-- CRUD for `clinic`, `client`, `patient`. Audit triggers for `audit_master_data`.
-- *First tests:* migration applies on MySQL Testcontainer; creating a client writes exactly one `INSERT` audit row; `GET /api/v1/sw/clients/{id}` never returns a client from `pms_ne`.
+- **Implemented database layer:** Flyway migrations for the shared schema, all 14 business tables, four audit tables, tenant-scoped constraints, and audit/version triggers. MySQL Testcontainers integration tests cover schema creation, a Spring Data repository, and audit stream behavior.
+- Remaining: URL-to-tenant resolution and API CRUD for `clinic`, `client`, and `patient`.
+- *Next tests:* tenant-aware API requests never return another tenant's records; API writes are covered by the database audit triggers.
 - *Done when:* the three CRUD resources work in all six regions and audit rows are verified.
 
 **Phase 2: PMS layer 2**
@@ -500,16 +524,16 @@ Each phase ends green (`./mvnw clean verify`) and merged. Start each task by wri
 
 ---
 
-## 13. Claude Code working agreement (also put in `CLAUDE.md`)
+## 13. Coding-agent working agreement (also in `AGENTS.md` and `.github/copilot-instructions.md`)
 
 ```markdown
 # Rules for the agent
 - Follow TDD strictly: write a failing test, show it failing, implement the minimum, run tests, refactor.
 - Work on ONE roadmap phase task at a time (README section 12). Ask before starting a new phase.
-- Build/test with the Maven Wrapper only: `./mvnw clean verify` (Windows: `mvnw.cmd`). Never assume global Maven.
+- Build/test with Maven 3.9.9 until the Maven Wrapper is added: `mvn clean verify`.
 - Everything must work on Windows 11 AND Ubuntu: no OS-specific paths or shell-only scripts.
 - Respect module boundaries: action-engine must not import PMS classes; sync-service accesses MySQL read-only;
-  shared types live only in libs/sync-contracts.
+  once introduced, shared types live only in libs/sync-contracts.
 - Never hardcode secrets or hostnames. Configuration comes from env vars / Spring profiles (local, uat, prod).
 - Never use real personal data; synthetic data only.
 - Domain code takes a java.time.Clock; do not call Instant.now() directly.
@@ -519,9 +543,19 @@ Each phase ends green (`./mvnw clean verify`) and merged. Start each task by wri
 - Before finishing a task: run the full test suite and summarise what changed and what is still open.
 ```
 
-Suggested `.claude/settings.json` allow-list: `./mvnw *`, `mvnw.cmd *`, `docker compose *`, `git status/diff/add/commit`. Require confirmation for anything that touches Azure (`az`, `azd`, `bicep deploy`).
+GitHub Copilot custom agents, prompts, skills, and path-specific instructions live under `.github/`. See `CONTRIBUTING.md` for contributor workflow and `.github/PULL_REQUEST_TEMPLATE.md` for the pull request checklist. Azure provisioning and deployment require explicit approval; workflow configuration alone does not authorize a deployment.
 
-Suggested slash commands in `.claude/commands/`: `tdd-next.md` (pick the next unchecked roadmap item, write the failing test first), `add-migration.md`, `add-stream.md`, `review-contract-change.md`.
+Repository agent entry points:
+
+| File or directory | Purpose |
+|-------------------|---------|
+| `AGENTS.md`, `.github/copilot-instructions.md` | Shared repository and Copilot rules |
+| `.github/agents/` | Planner, implementer, and read-only reviewer roles |
+| `.github/prompts/` | Reusable feature, review, sync-stream, and contract-change tasks |
+| `.github/skills/` | Repeatable TDD, service-boundary, and GitHub Actions guidance |
+| `.github/instructions/` | Java, workflow, and Markdown path-specific instructions |
+| `.github/ISSUE_TEMPLATE/`, `.github/PULL_REQUEST_TEMPLATE.md` | Structured contribution intake and handoff |
+| `CONTRIBUTING.md`, `SECURITY.md` | Contributor workflow and security reporting guidance |
 
 ---
 
@@ -531,8 +565,8 @@ These are deliberately flagged rather than decided silently. Turn each into an A
 
 | ID | Question | Current proposal | Why it's open |
 |----|----------|------------------|---------------|
-| D1 | Tenancy: schema-per-region vs shared schema with `tenant_id` | Schema per region | Better isolation and per-region backup; costs more operational overhead. Your "6 tenants" wording fits either. |
-| D2 | Audit writing: DB triggers vs application-level | Triggers | Captures out-of-band changes; harder to test and to keep JSON payloads in sync. Confirm this fits your operating constraints. |
+| D1 | Tenancy: schema-per-region vs shared schema with `tenant_id` | **Resolved: one shared schema with `tenant_id`** | Chosen for this POC; tenant-scoped unique keys and composite foreign keys constrain business data. |
+| D2 | Audit writing: DB triggers vs application-level | **Resolved: MySQL triggers** | Implemented in Flyway; triggers also advance row versions on direct SQL updates. |
 | D3 | Sync state store | MongoDB local, Cosmos DB (Mongo API) in Azure | **Verify** Cosmos Mongo API supports the features used (TTL indexes, unique indexes, transactions you rely on) and behaves the same as local MongoDB in tests. Alternative: Cosmos NoSQL API with its emulator, or Azure Table Storage. |
 | D4 | Messaging and local emulation | Azure Service Bus; local via the Service Bus emulator or RabbitMQ behind a port | **Verify** current emulator capabilities and limits (including whether it runs cleanly on both Windows/Docker Desktop and Ubuntu, and how topics/queues are configured). Also decide whether per-aggregate ordering (sessions) is required. |
 | D5 | Timers: Container Apps Jobs vs Azure Functions timer trigger | Container Apps Jobs (cron), same image as worker | **Verify** the minimum practical schedule granularity (cron is typically per-minute, so "near real-time" below one minute needs the long-running listener instead). |
