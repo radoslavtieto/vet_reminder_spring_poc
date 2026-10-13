@@ -1,0 +1,84 @@
+name: Action Engine CI/CD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "pom.xml"
+      - "services/action-engine/**"
+      - ".github/workflows/action-engine.yml"
+  pull_request:
+    paths:
+      - "pom.xml"
+      - "services/action-engine/**"
+      - ".github/workflows/action-engine.yml"
+  workflow_dispatch:
+    inputs:
+      deploy_uat:
+        description: Deploy to the pre-provisioned UAT Container App
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: action-engine-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - uses: stCarolas/setup-maven@v5
+        with:
+          maven-version: 3.9.9
+      - name: Verify Action Engine and its Maven dependencies
+        run: mvn -B -pl services/action-engine -am verify
+
+  deploy-uat:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_uat }}
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    environment: uat
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AZURE_ACR_NAME: ${{ vars.AZURE_ACR_NAME }}
+      AZURE_ACR_LOGIN_SERVER: ${{ vars.AZURE_ACR_LOGIN_SERVER }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AZURE_CONTAINER_APP_NAME: ${{ vars.AZURE_CONTAINER_APP_NAME }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      IMAGE: ${{ vars.AZURE_ACR_LOGIN_SERVER }}/action-engine:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Build and push image to ACR
+        run: az acr build --registry "$AZURE_ACR_NAME" --image "$IMAGE" --file services/action-engine/Dockerfile .
+      - name: Update UAT Container App
+        env:
+          APPLICATIONINSIGHTS_CONNECTION_STRING: ${{ secrets.APPLICATIONINSIGHTS_CONNECTION_STRING }}
+        run: |
+          if [ -z "$APPLICATIONINSIGHTS_CONNECTION_STRING" ]; then
+            echo "Set the APPLICATIONINSIGHTS_CONNECTION_STRING secret in the uat environment."
+            exit 1
+          fi
+          az containerapp update \
+            --name "$AZURE_CONTAINER_APP_NAME" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --image "$IMAGE" \
+            --set-env-vars \
+              "APPLICATIONINSIGHTS_CONNECTION_STRING=$APPLICATIONINSIGHTS_CONNECTION_STRING" \
+              "APPLICATIONINSIGHTS_ROLE_NAME=action-engine"
