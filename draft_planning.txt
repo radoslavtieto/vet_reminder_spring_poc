@@ -4,29 +4,36 @@ Java POC
 I want to build a Java app hosted in Azure.
 It should be written with test driven development.
 It should support Claude code CLI agentic development.
-It should be able to be running localy on Windows 11 and Ubuntu.
+It should be able to be running locally on Windows 11 and Ubuntu.
 It should have local, uat and prod environments.
-The idea is to have a syncronisation tool.
+The idea is to have a synchronization tool.
 We have three different applications:
 1. Source System (Core PMS)
 2. Middle Sync Service
 3. Action Engine & Dispatcher
 
-Source System (Core PMS) -Clinic PMS (Master Node): Tracks patients, species/breeds, medical history, active prescriptions, and completed clinic visits.
-a.It should have a big MySql database with 6 different tenants per region in Bulgaria:
-    
-South West
-South East
-South Central
-North East
-North West
-North Central Think of what database scheme could be a good example DB should have clinics data, clients (owners), pets, perscriptions, history, invoices etc. DB should have audit tables that will be used by the middle sync layer to pull data from in added order b.It should have an Spring Boot Web API allowing CRUD (think of business needs)
+1. Source System (Core PMS) - Clinic PMS (Master Node): Tracks patients, species/breeds, medical history, active prescriptions, and completed clinic visits.
+    a.It should have a big MySql database with 6 different tenants per region in Bulgaria:
+        - South West
+        - South East
+        - South Central
+        - North East
+        - North West
+        - North Central
+Think of what database scheme could be a good example DB should have clinics data, clients (owners), pets, prescriptions, history, invoices etc.
+DB should have audit tables that will be used by the middle sync layer to pull data from in added order
 
-2 . Middle sync layer - Change Data Capture / Polling Sync Worker: Near-real-time synchronization service that polls or listens for new medical status updates and prescription expirations or unpaid invoices from last 6 months.
-Spring boot event driven App that will
-support initial sync
-support partial sync
-poll data on timer triggered azure jobs from certain audit tables (active perscriptions, visits, invoices)
-listen to events when client, clinic, patient data gets updated/created
-it has nosql db to store poller pointers, deduplicate data etc.
-Listen to data input from middle sync layer and convert to its own domain. It has its own Postgre database I want to start with the initial layer of each of those by creating a good MD file that will structure this data correctly in a readme file that will be used as a starting point for the Claude code agent,
+    b.It should have a Spring Boot Web API allowing CRUD (think of business needs)
+
+2 . Middle sync layer - Change Data Capture / Polling Sync Worker:
+Near-real-time synchronization service that polls or listens for new medical status updates and prescription expirations or unpaid invoices from last 6 months.
+Spring boot event driven App that will:
+    - support initial sync
+    - support partial sync
+    - poll data on timer triggered azure jobs from certain audit tables (active prescriptions, visits, invoices)
+    - listen to events when client, clinic, patient data gets updated/created
+    - it has NoSql db to store poller pointers, deduplicate data etc.
+    - listen to data input from middle sync layer and convert to its own domain.
+    - it has its own Postgres database
+
+I want to start with the initial layer of each of those by creating a good MD file that will structure this data correctly in a .readme file that will be used as a starting point for the Claude code agent.
