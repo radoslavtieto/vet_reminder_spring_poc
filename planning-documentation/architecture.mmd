@@ -1,0 +1,16 @@
+flowchart LR
+  A[pms-api: Spring Boot REST CRUD] -->|reads and writes| B[MySQL: 6 regional schemas]
+  B --> C[Business tables: clinic, client, patient, visit, prescription, invoice]
+  C -->|triggers| D[Audit tables: master data, visit, prescription, invoice]
+  D -->|read-only polling| G[PollStreamUseCase: audit streams and time-window scans]
+  C -->|expiry and unpaid scans| G
+  E[sync-service worker: master-data listener] --> G
+  F[Container Apps Jobs: cron polling] --> G
+  G <-->|pointers, leases, dedupe| H[NoSQL: Mongo or Cosmos]
+  G -->|SyncEnvelope events| I[Azure Service Bus: queue or topic and DLQ]
+  I --> J[action-engine: consumer and inbox idempotency]
+  J --> K[Anti-corruption layer: Contact, CareSubject, Treatment, Receivable]
+  K --> L[Rules engine]
+  L -->|persist actions| M[PostgreSQL: action engine domain]
+  M --> N[Dispatcher: email, SMS, staff task]
+  N --> O[Owners and clinic staff]
