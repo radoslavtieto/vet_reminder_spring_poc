@@ -318,11 +318,25 @@ Base path: `/api/v1/{region}` where `{region}` is one of the lowercase codes `sw
 
 Client listing supports a simple `q` match over name, phone, or email; patient listing supports exact `microchip`; invoice listing supports `status`. Nested creation verifies that referenced parents and related records belong to the requested tenant and match the path parent. Payment registration checks the invoice balance and updates its paid amount/status.
 
-Authentication, OpenAPI documentation, ETag/If-Match optimistic concurrency, clinic transfer workflows, visit state-transition actions, invoice issue/void actions, species/breed/medication catalog endpoints, and prescription-item management are not implemented by this API yet.
+OpenAPI documentation and Swagger UI are available at `/v3/api-docs` and `/swagger-ui/index.html`. Spring Security and JWT authentication/authorization are not implemented yet, so the API must not be treated as authenticated or exposed to untrusted networks. ETag/If-Match optimistic concurrency, clinic transfer workflows, visit state-transition actions, invoice issue/void actions, species/breed/medication catalog endpoints, and prescription-item management are also not implemented by this API yet.
 
 The current API validates tenant/parent ownership, required fields and enum values, prescription date order, invoice paid totals, and payment balance. More involved workflow rules—such as immutable completed visits, medication catalogue/item management, and controlled-medication licensing—remain future work.
 
-**Seed data:** a Java-based synthetic data generator (e.g. Datafaker), profile `local` only, configurable volume (e.g. 50 clinics, 100k clients, 150k pets across regions) to make "big database" tests realistic.
+### 7.5 Technology and capability status
+
+The planning draft calls for Hibernate/JPA, Liquibase, API integration tests, JWT security, Actuator/Micrometer monitoring integrated with Azure Monitor and Application Insights, and Swagger UI. Current implementation status:
+
+| Capability | Current status |
+|------------|----------------|
+| MySQL schema and six regional tenants | Implemented as one shared schema with tenant-scoped business and audit rows; this is a POC schema, not a claim of production-scale capacity. |
+| Hibernate and JPA | Implemented with Spring Data JPA entities and repositories. |
+| Database migrations | Flyway is implemented and is the schema source of truth. Liquibase is in the planning draft but has not been adopted; changing migration tools requires an explicit decision. |
+| CRUD API and integration tests | Implemented for the resources and operations listed above; API and database integration tests use Testcontainers with MySQL. |
+| OpenAPI and Swagger UI | Implemented; endpoints are `/v3/api-docs` and `/swagger-ui/index.html`. |
+| Spring Security and JWT | Not implemented. |
+| Actuator, Micrometer, Azure Monitor, and Application Insights | Not implemented for `pms-api`. |
+
+**Local seed data:** `services/pms-api/src/main/resources/db/seed/local-seed.sql` contains a small, synthetic sample for the `SW` tenant and is intended for local use. A configurable large-volume data generator for realistic scale testing is future work; do not use real client or clinical data.
 
 ---
 

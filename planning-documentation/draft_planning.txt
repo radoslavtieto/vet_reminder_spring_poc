@@ -3,7 +3,7 @@ Java POC
 
 I want to build a Java app hosted in Azure.
 It should be written with test driven development.
-It should support Claude code CLI agentic development.
+It should support GitHub Copilot CLI agentic development.
 It should be able to be running locally on Windows 11 and Ubuntu.
 It should have local, uat and prod environments.
 The idea is to have a synchronization tool.
@@ -12,7 +12,8 @@ We have three different applications:
 2. Middle Sync Service
 3. Action Engine & Dispatcher
 
-1. Source System (Core PMS) - Clinic PMS (Master Node): Tracks patients, species/breeds, medical history, active prescriptions, and completed clinic visits.
+1. Source System (Core PMS) - Clinic PMS (Master Node):
+ Tracks patients, species/breeds, medical history, active prescriptions, and completed clinic visits.
     a.It should have a big MySql database with 6 different tenants per region in Bulgaria:
         - South West
         - South East
@@ -23,7 +24,13 @@ We have three different applications:
 Think of what database scheme could be a good example DB should have clinics data, clients (owners), pets, prescriptions, history, invoices etc.
 DB should have audit tables that will be used by the middle sync layer to pull data from in added order
 
-    b.It should have a Spring Boot Web API allowing CRUD (think of business needs)
+    b. It should have a Spring Boot Web API allowing CRUD (think of business needs)
+    c. It should use Spring Security with JWT for authentication and authorization
+    d. It should have integration tests for the API endpoints
+    e. It should use Liquibase for database migrations
+    f. It should use Hibernate for ORM and JPA for data access
+    g. It should have logging and monitoring using Spring Boot Actuator and Micrometer which will be integrated with Azure Monitor and Application Insights
+    h. It should have a swagger UI for API documentation and testing
 
 2 . Middle sync layer - Change Data Capture / Polling Sync Worker:
 Near-real-time synchronization service that polls or listens for new medical status updates and prescription expirations or unpaid invoices from last 6 months.
