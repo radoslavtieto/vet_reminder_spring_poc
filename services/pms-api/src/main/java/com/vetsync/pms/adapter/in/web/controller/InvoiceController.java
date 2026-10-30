@@ -46,6 +46,16 @@ public class InvoiceController {
         return service.invoice(service.tenant(region), id);
     }
 
+    @PostMapping("/invoices/{id}/issue")
+    public InvoiceDto.InvoiceView issueInvoice(@PathVariable String region, @PathVariable long id) {
+        return service.issueInvoice(service.tenant(region), id);
+    }
+
+    @PostMapping("/invoices/{id}/void")
+    public InvoiceDto.InvoiceView voidInvoice(@PathVariable String region, @PathVariable long id) {
+        return service.voidInvoice(service.tenant(region), id);
+    }
+
     @PutMapping("/invoices/{id}")
     public InvoiceDto.InvoiceView updateInvoice(@PathVariable String region, @PathVariable long id,
                                                 @Valid @RequestBody InvoiceDto.InvoiceRequest request) {

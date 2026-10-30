@@ -1,6 +1,7 @@
 package com.vetsync.pms.adapter.in.web.controller;
 
 import com.vetsync.pms.adapter.in.web.dto.PrescriptionDto;
+import com.vetsync.pms.adapter.in.web.dto.PrescriptionItemDto;
 import com.vetsync.pms.application.PmsApplicationService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -70,5 +71,21 @@ public class PrescriptionController {
         PrescriptionDto.PrescriptionView created =
                 service.createPrescriptionForVisit(service.tenant(region), visitId, request);
         return ControllerResponses.created("/api/v1/" + region + "/prescriptions/" + created.id(), created);
+    }
+
+    @GetMapping("/prescriptions/{prescriptionId}/items")
+    public List<PrescriptionItemDto.PrescriptionItemView> prescriptionItems(
+            @PathVariable String region, @PathVariable long prescriptionId) {
+        return service.prescriptionItems(service.tenant(region), prescriptionId);
+    }
+
+    @PostMapping("/prescriptions/{prescriptionId}/items")
+    public ResponseEntity<PrescriptionItemDto.PrescriptionItemView> addPrescriptionItem(
+            @PathVariable String region, @PathVariable long prescriptionId,
+            @Valid @RequestBody PrescriptionItemDto.PrescriptionItemRequest request) {
+        PrescriptionItemDto.PrescriptionItemView created =
+                service.addPrescriptionItem(service.tenant(region), prescriptionId, request);
+        return ControllerResponses.created("/api/v1/" + region + "/prescriptions/"
+                + prescriptionId + "/items/" + created.id(), created);
     }
 }

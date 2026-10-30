@@ -5,10 +5,12 @@ import com.vetsync.pms.adapter.out.persistence.entity.BusinessEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.ClinicEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.ClientEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.InvoiceEntity;
+import com.vetsync.pms.adapter.out.persistence.entity.MedicationEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.MedicalRecordEntryEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.PatientEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.PaymentEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.PrescriptionEntity;
+import com.vetsync.pms.adapter.out.persistence.entity.PrescriptionItemEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.SpeciesEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.StaffEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.VisitEntity;
@@ -16,10 +18,12 @@ import com.vetsync.pms.adapter.out.persistence.repository.BreedRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.ClinicRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.ClientRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.InvoiceRepository;
+import com.vetsync.pms.adapter.out.persistence.repository.MedicationRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.MedicalRecordEntryRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.PatientRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.PaymentRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.PrescriptionRepository;
+import com.vetsync.pms.adapter.out.persistence.repository.PrescriptionItemRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.SpeciesRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.StaffRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.VisitRepository;
@@ -35,6 +39,9 @@ import java.util.Objects;
 
 import static com.vetsync.pms.adapter.in.web.dto.ClientDto.ClientRequest;
 import static com.vetsync.pms.adapter.in.web.dto.ClientDto.ClientView;
+import static com.vetsync.pms.adapter.in.web.dto.CatalogDto.BreedView;
+import static com.vetsync.pms.adapter.in.web.dto.CatalogDto.MedicationView;
+import static com.vetsync.pms.adapter.in.web.dto.CatalogDto.SpeciesView;
 import static com.vetsync.pms.adapter.in.web.dto.ClinicDto.ClinicRequest;
 import static com.vetsync.pms.adapter.in.web.dto.ClinicDto.ClinicView;
 import static com.vetsync.pms.adapter.in.web.dto.InvoiceDto.InvoiceRequest;
@@ -47,6 +54,8 @@ import static com.vetsync.pms.adapter.in.web.dto.PaymentDto.PaymentRequest;
 import static com.vetsync.pms.adapter.in.web.dto.PaymentDto.PaymentView;
 import static com.vetsync.pms.adapter.in.web.dto.PrescriptionDto.PrescriptionRequest;
 import static com.vetsync.pms.adapter.in.web.dto.PrescriptionDto.PrescriptionView;
+import static com.vetsync.pms.adapter.in.web.dto.PrescriptionItemDto.PrescriptionItemRequest;
+import static com.vetsync.pms.adapter.in.web.dto.PrescriptionItemDto.PrescriptionItemView;
 import static com.vetsync.pms.adapter.in.web.dto.StaffDto.StaffRequest;
 import static com.vetsync.pms.adapter.in.web.dto.StaffDto.StaffView;
 import static com.vetsync.pms.adapter.in.web.dto.VisitDto.VisitRequest;
@@ -66,8 +75,10 @@ public class PmsApplicationService {
     private final VisitRepository visits;
     private final PrescriptionRepository prescriptions;
     private final InvoiceRepository invoices;
+    private final MedicationRepository medications;
     private final PaymentRepository payments;
     private final MedicalRecordEntryRepository history;
+    private final PrescriptionItemRepository prescriptionItems;
     private final SpeciesRepository species;
     private final BreedRepository breeds;
     private final Clock clock;
@@ -75,8 +86,9 @@ public class PmsApplicationService {
     public PmsApplicationService(ClinicRepository clinics, StaffRepository staff,
                                  ClientRepository clients, PatientRepository patients,
                                  VisitRepository visits, PrescriptionRepository prescriptions,
-                                 InvoiceRepository invoices, PaymentRepository payments,
-                                 MedicalRecordEntryRepository history, SpeciesRepository species,
+                                 InvoiceRepository invoices, MedicationRepository medications,
+                                 PaymentRepository payments, MedicalRecordEntryRepository history,
+                                 PrescriptionItemRepository prescriptionItems, SpeciesRepository species,
                                  BreedRepository breeds, Clock clock) {
         this.clinics = clinics;
         this.staff = staff;
@@ -85,23 +97,40 @@ public class PmsApplicationService {
         this.visits = visits;
         this.prescriptions = prescriptions;
         this.invoices = invoices;
+        this.medications = medications;
         this.payments = payments;
         this.history = history;
+        this.prescriptionItems = prescriptionItems;
         this.species = species;
         this.breeds = breeds;
         this.clock = clock;
     }
 
     public String tenant(String region) {
-        return switch (region) {
-            case "sw" -> "SW";
-            case "se" -> "SE";
-            case "sc" -> "SC";
-            case "ne" -> "NE";
-            case "nw" -> "NW";
-            case "nc" -> "NC";
-            default -> throw missing("Unknown region");
-        };
+        return TenantResolver.resolve(region);
+    }
+
+    public List<SpeciesView> species(String tenant) {
+        return active(species.findAllByTenantId(tenant)).stream()
+                .map(entity -> new SpeciesView(entity.getId(), entity.getPublicId(),
+                        entity.getTenantId(), entity.getCode(), entity.getName()))
+                .toList();
+    }
+
+    public List<BreedView> breeds(String tenant, long speciesId) {
+        speciesEntity(tenant, speciesId);
+        return active(breeds.findAllByTenantIdAndSpecies_Id(tenant, speciesId)).stream()
+                .map(entity -> new BreedView(entity.getId(), entity.getPublicId(), entity.getTenantId(),
+                        entity.getSpecies().getId(), entity.getCode(), entity.getName()))
+                .toList();
+    }
+
+    public List<MedicationView> medications(String tenant) {
+        return active(medications.findAllByTenantId(tenant)).stream()
+                .map(entity -> new MedicationView(entity.getId(), entity.getPublicId(), entity.getTenantId(),
+                        entity.getCode(), entity.getName(), entity.getForm(), entity.getStrength(),
+                        entity.isControlled()))
+                .toList();
     }
 
     public List<ClinicView> clinics(String tenant) {
@@ -223,6 +252,26 @@ public class PmsApplicationService {
         return view(patients.saveAndFlush(entity));
     }
 
+    public PatientView transferPatientToClinic(String tenant, long patientId, long clinicId) {
+        PatientEntity patient = patientEntity(tenant, patientId);
+        ClinicEntity destination = clinicEntity(tenant, clinicId);
+        if (patient.getStatus() != PatientEntity.PatientStatus.ACTIVE) {
+            throw badRequest("Only active patients can be transferred");
+        }
+        if (!destination.isActive()) {
+            throw badRequest("Patients can only be transferred to an active clinic");
+        }
+        boolean hasOpenVisit = active(visits.findAllByTenantIdAndPatient_IdOrderByScheduledAtDesc(tenant, patientId))
+                .stream()
+                .anyMatch(visit -> visit.getStatus() == VisitEntity.VisitStatus.SCHEDULED
+                        || visit.getStatus() == VisitEntity.VisitStatus.IN_PROGRESS);
+        if (hasOpenVisit) {
+            throw badRequest("Patient cannot be transferred while scheduled or in-progress visits exist");
+        }
+        patient.transferToClinic(destination);
+        return view(patients.saveAndFlush(patient));
+    }
+
     public void deletePatient(String tenant, long id) { softDelete(patientEntity(tenant, id)); }
 
     public List<HistoryView> history(String tenant, long patientId) {
@@ -281,12 +330,35 @@ public class PmsApplicationService {
     public VisitView updateVisit(String tenant, long id, VisitRequest request) {
         if (request.patientId() == null) throw badRequest("patientId is required");
         VisitEntity entity = visitEntity(tenant, id);
+        VisitEntity.VisitStatus requestedStatus = request.status() == null
+                ? entity.getStatus()
+                : enumValue(VisitEntity.VisitStatus.class, request.status());
+        if (requestedStatus != entity.getStatus()) {
+            throw badRequest("Use the visit status transition action to change status");
+        }
         entity.update(patientEntity(tenant, request.patientId()), clinicEntity(tenant, request.clinicId()),
                 staffEntity(tenant, request.vetId()), request.visitType(),
-                enumValue(VisitEntity.VisitStatus.class, defaultValue(request.status(), "SCHEDULED")),
+                entity.getStatus(),
                 request.scheduledAt(), request.startedAt(), request.completedAt(), request.reason(),
                 request.diagnosis(), request.notes());
         verifyVisitLinks(entity.getPatient(), entity.getClinic(), entity.getVet());
+        return view(visits.saveAndFlush(entity));
+    }
+
+    public VisitView transitionVisit(String tenant, long id, String targetStatus) {
+        VisitEntity entity = visitEntity(tenant, id);
+        VisitEntity.VisitStatus target = enumValue(VisitEntity.VisitStatus.class, targetStatus);
+        boolean allowed = switch (entity.getStatus()) {
+            case SCHEDULED -> target == VisitEntity.VisitStatus.IN_PROGRESS
+                    || target == VisitEntity.VisitStatus.CANCELLED;
+            case IN_PROGRESS -> target == VisitEntity.VisitStatus.COMPLETED
+                    || target == VisitEntity.VisitStatus.CANCELLED;
+            case COMPLETED, CANCELLED -> false;
+        };
+        if (!allowed) {
+            throw badRequest("Visit cannot transition from " + entity.getStatus() + " to " + target);
+        }
+        entity.transitionTo(target, Instant.now(clock));
         return view(visits.saveAndFlush(entity));
     }
 
@@ -332,6 +404,28 @@ public class PmsApplicationService {
 
     public void deletePrescription(String tenant, long id) { softDelete(prescriptionEntity(tenant, id)); }
 
+    public List<PrescriptionItemView> prescriptionItems(String tenant, long prescriptionId) {
+        prescriptionEntity(tenant, prescriptionId);
+        return active(prescriptionItems.findAllByTenantIdAndPrescription_Id(tenant, prescriptionId))
+                .stream().map(this::view).toList();
+    }
+
+    public PrescriptionItemView addPrescriptionItem(String tenant, long prescriptionId,
+                                                     PrescriptionItemRequest request) {
+        PrescriptionEntity prescription = prescriptionEntity(tenant, prescriptionId);
+        MedicationEntity medication = find(medications.findByTenantIdAndId(tenant, request.medicationId()));
+        if (medication.isControlled()
+                && (prescription.getVet().getRole() != StaffEntity.StaffRole.VET
+                || prescription.getVet().getLicenseNo() == null
+                || prescription.getVet().getLicenseNo().isBlank())) {
+            throw badRequest("Controlled medication requires a licensed vet");
+        }
+        PrescriptionItemEntity item = new PrescriptionItemEntity(tenant, prescription, medication,
+                request.dosage(), request.frequency(), request.durationDays(),
+                request.quantity(), request.refillsAllowed());
+        return view(prescriptionItems.save(item));
+    }
+
     public List<InvoiceView> invoices(String tenant, String status) {
         if (status != null && !status.isBlank()) enumValue(InvoiceEntity.InvoiceStatus.class, status);
         return active(invoices.findAllByTenantId(tenant)).stream()
@@ -348,13 +442,50 @@ public class PmsApplicationService {
 
     public InvoiceView updateInvoice(String tenant, long id, InvoiceRequest request) {
         InvoiceEntity entity = invoiceEntity(tenant, id);
+        InvoiceEntity.InvoiceStatus requestedStatus = request.status() == null
+                ? entity.getStatus() : enumValue(InvoiceEntity.InvoiceStatus.class, request.status());
+        if (requestedStatus != entity.getStatus()) {
+            throw badRequest("Invoice status can only be changed through issue, void, and payment actions");
+        }
+        if (request.paidAmount().compareTo(entity.getPaidAmount()) != 0) {
+            throw badRequest("paidAmount is managed through payment registration");
+        }
         entity.update(clinicEntity(tenant, request.clinicId()), clientEntity(tenant, request.clientId()),
                 request.visitId() == null ? null : visitEntity(tenant, request.visitId()), request.invoiceNo(),
-                enumValue(InvoiceEntity.InvoiceStatus.class, defaultValue(request.status(), "DRAFT")),
+                entity.getStatus(),
                 request.issuedOn(), request.dueOn(), defaultValue(request.currency(), "EUR"),
-                request.totalAmount(), request.paidAmount());
+                request.totalAmount(), entity.getPaidAmount());
         validateInvoice(entity);
         return view(invoices.saveAndFlush(entity));
+    }
+
+    public InvoiceView issueInvoice(String tenant, long id) {
+        InvoiceEntity invoice = invoiceEntity(tenant, id);
+        if (invoice.getStatus() == InvoiceEntity.InvoiceStatus.ISSUED) {
+            return view(invoice);
+        }
+        if (invoice.getStatus() != InvoiceEntity.InvoiceStatus.DRAFT
+                || invoice.getPaidAmount().signum() != 0) {
+            throw badRequest("Only unpaid draft invoices can be issued");
+        }
+        invoice.transitionTo(InvoiceEntity.InvoiceStatus.ISSUED);
+        return view(invoices.saveAndFlush(invoice));
+    }
+
+    public InvoiceView voidInvoice(String tenant, long id) {
+        InvoiceEntity invoice = invoiceEntity(tenant, id);
+        if (invoice.getStatus() == InvoiceEntity.InvoiceStatus.VOID) {
+            return view(invoice);
+        }
+        if (invoice.getPaidAmount().signum() != 0) {
+            throw badRequest("An invoice with payments cannot be voided");
+        }
+        if (invoice.getStatus() != InvoiceEntity.InvoiceStatus.DRAFT
+                && invoice.getStatus() != InvoiceEntity.InvoiceStatus.ISSUED) {
+            throw badRequest("Only draft or unpaid issued invoices can be voided");
+        }
+        invoice.transitionTo(InvoiceEntity.InvoiceStatus.VOID);
+        return view(invoices.saveAndFlush(invoice));
     }
 
     public void deleteInvoice(String tenant, long id) { softDelete(invoiceEntity(tenant, id)); }
@@ -559,6 +690,12 @@ public class PmsApplicationService {
     private PaymentView view(PaymentEntity e) {
         return new PaymentView(e.getId(), e.getPublicId(), e.getTenantId(), e.getInvoice().getId(),
                 e.getPaidAt(), e.getAmount(), e.getMethod().name());
+    }
+    private PrescriptionItemView view(PrescriptionItemEntity e) {
+        return new PrescriptionItemView(e.getId(), e.getPublicId(), e.getTenantId(),
+                e.getPrescription().getId(), e.getMedication().getId(), e.getMedication().getCode(),
+                e.getMedication().getName(), e.getDosage(), e.getFrequency(), e.getDurationDays(),
+                e.getQuantity(), e.getRefillsAllowed());
     }
 
     private static String name(Enum<?> value) { return value == null ? null : value.name(); }

@@ -38,4 +38,10 @@ public class MedicationEntity extends BusinessEntity {
         this.strength = strength;
         this.controlled = controlled;
     }
+
+    public String getCode() { return code; }
+    public String getName() { return name; }
+    public String getForm() { return form; }
+    public String getStrength() { return strength; }
+    public boolean isControlled() { return controlled; }
 }

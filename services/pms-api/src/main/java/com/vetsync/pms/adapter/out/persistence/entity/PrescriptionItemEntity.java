@@ -51,4 +51,12 @@ public class PrescriptionItemEntity extends BusinessEntity {
         this.quantity = quantity;
         this.refillsAllowed = refillsAllowed;
     }
+
+    public PrescriptionEntity getPrescription() { return prescription; }
+    public MedicationEntity getMedication() { return medication; }
+    public String getDosage() { return dosage; }
+    public String getFrequency() { return frequency; }
+    public int getDurationDays() { return durationDays; }
+    public BigDecimal getQuantity() { return quantity; }
+    public int getRefillsAllowed() { return refillsAllowed; }
 }

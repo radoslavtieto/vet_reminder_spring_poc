@@ -31,4 +31,8 @@ public final class VisitDto {
                        Instant startedAt, Instant completedAt, String reason, String diagnosis,
                        String notes, Instant createdAt, Instant updatedAt) {
     }
+
+    public record StatusTransitionRequest(
+            @NotBlank String status) {
+    }
 }

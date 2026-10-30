@@ -100,6 +100,15 @@ public class VisitEntity extends BusinessEntity {
         this.notes = notes;
     }
 
+    public void transitionTo(VisitStatus status, Instant transitionedAt) {
+        this.status = status;
+        if (status == VisitStatus.IN_PROGRESS && startedAt == null) {
+            this.startedAt = transitionedAt;
+        } else if (status == VisitStatus.COMPLETED) {
+            this.completedAt = transitionedAt;
+        }
+    }
+
     public enum VisitStatus {
         SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED
     }

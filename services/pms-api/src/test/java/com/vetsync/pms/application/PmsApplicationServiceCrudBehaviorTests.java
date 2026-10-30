@@ -11,10 +11,12 @@ import com.vetsync.pms.adapter.out.persistence.entity.BreedEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.ClinicEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.ClientEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.InvoiceEntity;
+import com.vetsync.pms.adapter.out.persistence.entity.MedicationEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.MedicalRecordEntryEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.PatientEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.PaymentEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.PrescriptionEntity;
+import com.vetsync.pms.adapter.out.persistence.entity.PrescriptionItemEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.SpeciesEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.StaffEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.VisitEntity;
@@ -22,10 +24,12 @@ import com.vetsync.pms.adapter.out.persistence.repository.BreedRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.ClinicRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.ClientRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.InvoiceRepository;
+import com.vetsync.pms.adapter.out.persistence.repository.MedicationRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.MedicalRecordEntryRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.PatientRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.PaymentRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.PrescriptionRepository;
+import com.vetsync.pms.adapter.out.persistence.repository.PrescriptionItemRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.SpeciesRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.StaffRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.VisitRepository;
@@ -50,6 +54,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -66,8 +72,10 @@ class PmsApplicationServiceCrudBehaviorTests {
     @Mock private VisitRepository visits;
     @Mock private PrescriptionRepository prescriptions;
     @Mock private InvoiceRepository invoices;
+    @Mock private MedicationRepository medications;
     @Mock private PaymentRepository payments;
     @Mock private MedicalRecordEntryRepository history;
+    @Mock private PrescriptionItemRepository prescriptionItems;
     @Mock private SpeciesRepository species;
     @Mock private BreedRepository breeds;
 
@@ -86,7 +94,8 @@ class PmsApplicationServiceCrudBehaviorTests {
     @BeforeEach
     void setUp() {
         service = new PmsApplicationService(clinics, staff, clients, patients, visits, prescriptions,
-                invoices, payments, history, species, breeds, Clock.fixed(NOW, ZoneOffset.UTC));
+                invoices, medications, payments, history, prescriptionItems, species, breeds,
+                Clock.fixed(NOW, ZoneOffset.UTC));
         clinic = entity(new ClinicEntity("SW", "Synthetic Clinic", "Sample City",
                 null, null, null, true), 1L);
         client = entity(new ClientEntity("SW", clinic, "Synthetic", "Owner",
@@ -205,6 +214,39 @@ class PmsApplicationServiceCrudBehaviorTests {
     }
 
     @Test
+    void givenAnActivePatientWithoutOpenVisitsWhenTransferredThenOnlyItsCurrentClinicChanges() {
+        ClinicEntity destination = entity(new ClinicEntity("SW", "Destination Clinic", "Sample City",
+                null, null, null, true), 25L);
+        when(patients.findByTenantIdAndId("SW", 5L)).thenReturn(Optional.of(patient));
+        when(clinics.findByTenantIdAndId("SW", 25L)).thenReturn(Optional.of(destination));
+        when(visits.findAllByTenantIdAndPatient_IdOrderByScheduledAtDesc("SW", 5L)).thenReturn(List.of());
+        when(patients.saveAndFlush(patient)).thenReturn(patient);
+
+        var transferred = service.transferPatientToClinic("SW", 5L, 25L);
+
+        assertThat(transferred.clinicId()).isEqualTo(25L);
+        assertThat(patient.getClinic().getId()).isEqualTo(25L);
+        assertThat(visit.getClinic().getId()).isEqualTo(1L);
+    }
+
+    @Test
+    void givenAPatientWithAnOpenVisitWhenTransferredThenTheTransferIsRejected() {
+        ClinicEntity destination = entity(new ClinicEntity("SW", "Destination Clinic", "Sample City",
+                null, null, null, true), 25L);
+        when(patients.findByTenantIdAndId("SW", 5L)).thenReturn(Optional.of(patient));
+        when(clinics.findByTenantIdAndId("SW", 25L)).thenReturn(Optional.of(destination));
+        when(visits.findAllByTenantIdAndPatient_IdOrderByScheduledAtDesc("SW", 5L)).thenReturn(List.of(visit));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> service.transferPatientToClinic("SW", 5L, 25L))
+                .isInstanceOf(PmsInvalidRequestException.class)
+                .hasMessage("Patient cannot be transferred while scheduled or in-progress visits exist");
+
+        verify(patients, never()).saveAndFlush(patient);
+        assertThat(patient.getClinic().getId()).isEqualTo(1L);
+    }
+
+    @Test
     void givenAVisitWhenManagedThenPatientClinicAndVetLinksRemainConsistent() {
         when(visits.findAllByTenantId("SW")).thenReturn(List.of(visit));
         when(visits.findAllByTenantIdAndPatient_IdOrderByScheduledAtDesc("SW", 5L))
@@ -226,6 +268,44 @@ class PmsApplicationServiceCrudBehaviorTests {
         assertThat(created.status()).isEqualTo("SCHEDULED");
         assertThat(updated.visitType()).isEqualTo("CHECKUP");
         assertThat(visit.getDeletedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    void givenAScheduledVisitWhenStartedAndCompletedThenTransitionTimesAreRecorded() {
+        when(visits.findByTenantIdAndId("SW", 6L)).thenReturn(Optional.of(visit));
+        when(visits.saveAndFlush(visit)).thenReturn(visit);
+
+        var started = service.transitionVisit("SW", 6L, "IN_PROGRESS");
+        var completed = service.transitionVisit("SW", 6L, "COMPLETED");
+
+        assertThat(started.status()).isEqualTo("IN_PROGRESS");
+        assertThat(started.startedAt()).isEqualTo(NOW);
+        assertThat(completed.status()).isEqualTo("COMPLETED");
+        assertThat(completed.completedAt()).isEqualTo(NOW);
+        verify(visits, org.mockito.Mockito.times(2)).saveAndFlush(visit);
+    }
+
+    @Test
+    void givenAScheduledVisitWhenCompletedDirectlyThenTransitionIsRejected() {
+        when(visits.findByTenantIdAndId("SW", 6L)).thenReturn(Optional.of(visit));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> service.transitionVisit("SW", 6L, "COMPLETED"))
+                .isInstanceOf(PmsInvalidRequestException.class)
+                .hasMessage("Visit cannot transition from SCHEDULED to COMPLETED");
+
+        verify(visits, never()).saveAndFlush(visit);
+        assertThat(visit.getStatus()).isEqualTo(VisitEntity.VisitStatus.SCHEDULED);
+    }
+
+    @Test
+    void givenAVisitUpdateWhenItChangesStatusThenTransitionActionIsRequired() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> service.updateVisit("SW", 6L, new VisitRequest(5L, 1L, 4L,
+                                "CHECKUP", "COMPLETED", NOW, NOW, NOW,
+                                "Annual checkup", null, null)))
+                .isInstanceOf(PmsInvalidRequestException.class)
+                .hasMessage("Use the visit status transition action to change status");
     }
 
     @Test
@@ -252,6 +332,52 @@ class PmsApplicationServiceCrudBehaviorTests {
     }
 
     @Test
+    void givenAPrescriptionAndMedicationWhenAnItemIsAddedThenItIsScopedAndReturned() {
+        MedicationEntity medication = entity(new MedicationEntity("SW", "SAMPLE-001",
+                "Synthetic medicine", "tablet", "10 mg", false), 20L);
+        PrescriptionItemEntity item = entity(new PrescriptionItemEntity("SW", prescription, medication,
+                "1 tablet", "once daily", 7, new BigDecimal("7.000"), 0), 21L);
+        when(prescriptions.findByTenantIdAndId("SW", 7L)).thenReturn(Optional.of(prescription));
+        when(medications.findByTenantIdAndId("SW", 20L)).thenReturn(Optional.of(medication));
+        when(prescriptionItems.save(any())).thenReturn(item);
+        when(prescriptionItems.findAllByTenantIdAndPrescription_Id("SW", 7L)).thenReturn(List.of(item));
+
+        var created = service.addPrescriptionItem("SW", 7L,
+                new com.vetsync.pms.adapter.in.web.dto.PrescriptionItemDto.PrescriptionItemRequest(
+                        20L, "1 tablet", "once daily", 7, new BigDecimal("7.000"), 0));
+        var listed = service.prescriptionItems("SW", 7L);
+
+        assertThat(created.id()).isEqualTo(21L);
+        assertThat(created.prescriptionId()).isEqualTo(7L);
+        assertThat(created.medicationCode()).isEqualTo("SAMPLE-001");
+        assertThat(created.durationDays()).isEqualTo(7);
+        assertThat(listed).hasSize(1);
+    }
+
+    @Test
+    void givenAControlledMedicationAndUnlicensedPrescriberWhenAddedThenItIsRejected() {
+        MedicationEntity medication = entity(new MedicationEntity("SW", "CONTROLLED-001",
+                "Synthetic controlled medicine", "tablet", "5 mg", true), 22L);
+        StaffEntity nurse = entity(new StaffEntity("SW", clinic, StaffEntity.StaffRole.NURSE,
+                "Synthetic Nurse", null, true), 23L);
+        PrescriptionEntity unlicensedPrescription = entity(new PrescriptionEntity("SW", patient, visit, nurse,
+                PrescriptionEntity.PrescriptionStatus.ACTIVE, LocalDate.parse("2026-09-30"),
+                LocalDate.parse("2026-10-14"), "Synthetic"), 24L);
+        when(prescriptions.findByTenantIdAndId("SW", 24L)).thenReturn(Optional.of(unlicensedPrescription));
+        when(medications.findByTenantIdAndId("SW", 22L)).thenReturn(Optional.of(medication));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> service.addPrescriptionItem("SW", 24L,
+                                new com.vetsync.pms.adapter.in.web.dto.PrescriptionItemDto
+                                        .PrescriptionItemRequest(22L, "1 tablet", "once daily", 7,
+                                        new BigDecimal("7.000"), 0)))
+                .isInstanceOf(PmsInvalidRequestException.class)
+                .hasMessage("Controlled medication requires a licensed vet");
+
+        verify(prescriptionItems, never()).save(any());
+    }
+
+    @Test
     void givenAnInvoiceWhenListedUpdatedAndItsPaymentsReadThenRelatedDataIsMapped() {
         when(invoices.findAllByTenantId("SW")).thenReturn(List.of(invoice));
         when(invoices.save(any())).thenAnswer(call -> call.getArgument(0));
@@ -259,7 +385,7 @@ class PmsApplicationServiceCrudBehaviorTests {
         when(payments.findAllByTenantIdAndInvoice_IdOrderByPaidAtDesc("SW", 8L))
                 .thenReturn(List.of(payment));
         when(payments.findByTenantIdAndId("SW", 9L)).thenReturn(Optional.of(payment));
-        InvoiceRequest request = invoiceRequest("PAID", "100.00", "100.00");
+        InvoiceRequest request = invoiceRequest("ISSUED", "100.00", "20.00");
 
         var all = service.invoices("SW", null);
         var issued = service.invoices("SW", "issued");
@@ -272,7 +398,7 @@ class PmsApplicationServiceCrudBehaviorTests {
         assertThat(all).hasSize(1);
         assertThat(issued).hasSize(1);
         assertThat(found.invoiceNo()).isEqualTo("INV-1");
-        assertThat(updated.status()).isEqualTo("PAID");
+        assertThat(updated.status()).isEqualTo("ISSUED");
         assertThat(invoicePayments).hasSize(1);
         assertThat(paymentFound.method()).isEqualTo("CARD");
         assertThat(invoice.getDeletedAt()).isEqualTo(NOW);
@@ -305,6 +431,24 @@ class PmsApplicationServiceCrudBehaviorTests {
                         () -> service.createPatient("SW", patientRequest(19L)))
                 .isInstanceOf(PmsResourceNotFoundException.class)
                 .hasMessage("Breed does not belong to species");
+    }
+
+    @Test
+    void givenCatalogEntriesWhenLookedUpThenOnlyActiveTenantScopedValuesAreReturned() {
+        BreedEntity breed = entity(new BreedEntity("SW", speciesEntity, "SYNTH", "Synthetic breed"), 26L);
+        MedicationEntity medication = entity(new MedicationEntity("SW", "SAMPLE-001",
+                "Synthetic medicine", "tablet", "10 mg", false), 27L);
+        MedicationEntity deletedMedication = entity(new MedicationEntity("SW", "OLD-001",
+                "Deleted medicine", "tablet", "1 mg", false), 28L);
+        deletedMedication.setDeletedAt(NOW);
+        when(species.findAllByTenantId("SW")).thenReturn(List.of(speciesEntity));
+        when(species.findByTenantIdAndId("SW", 3L)).thenReturn(Optional.of(speciesEntity));
+        when(breeds.findAllByTenantIdAndSpecies_Id("SW", 3L)).thenReturn(List.of(breed));
+        when(medications.findAllByTenantId("SW")).thenReturn(List.of(medication, deletedMedication));
+
+        assertThat(service.species("SW")).hasSize(1);
+        assertThat(service.breeds("SW", 3L)).extracting(view -> view.code()).containsExactly("SYNTH");
+        assertThat(service.medications("SW")).extracting(view -> view.code()).containsExactly("SAMPLE-001");
     }
 
     private PatientRequest patientRequest(Long breedId) {

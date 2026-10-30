@@ -98,6 +98,10 @@ public class InvoiceEntity extends BusinessEntity {
         this.paidAmount = paidAmount;
     }
 
+    public void transitionTo(InvoiceStatus status) {
+        this.status = status;
+    }
+
     public enum InvoiceStatus {
         DRAFT, ISSUED, PARTIALLY_PAID, PAID, VOID
     }

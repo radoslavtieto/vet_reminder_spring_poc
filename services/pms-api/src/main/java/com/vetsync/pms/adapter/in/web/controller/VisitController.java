@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -52,5 +53,12 @@ public class VisitController {
     public ResponseEntity<Void> deleteVisit(@PathVariable String region, @PathVariable long id) {
         service.deleteVisit(service.tenant(region), id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/{id}/status")
+    public VisitDto.VisitView transitionStatus(@PathVariable String region, @PathVariable long id,
+                                               @Valid @RequestBody
+                                               VisitDto.StatusTransitionRequest request) {
+        return service.transitionVisit(service.tenant(region), id, request.status());
     }
 }

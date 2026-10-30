@@ -114,6 +114,10 @@ public class PatientEntity extends BusinessEntity {
         this.deceasedAt = deceasedAt;
     }
 
+    public void transferToClinic(ClinicEntity clinic) {
+        this.clinic = clinic;
+    }
+
     public enum Sex {
         MALE, FEMALE, UNKNOWN
     }

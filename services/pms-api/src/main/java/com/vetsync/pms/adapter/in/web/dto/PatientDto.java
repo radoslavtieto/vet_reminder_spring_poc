@@ -36,4 +36,8 @@ public final class PatientDto {
                        String microchipNo, boolean neutered, BigDecimal weightKg,
                        String status, Instant deceasedAt, Instant createdAt, Instant updatedAt) {
     }
+
+    public record ClinicTransferRequest(
+            @NotNull @Positive Long clinicId) {
+    }
 }

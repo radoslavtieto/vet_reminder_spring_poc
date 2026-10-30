@@ -9,10 +9,12 @@ import com.vetsync.pms.adapter.out.persistence.repository.BreedRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.ClinicRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.ClientRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.InvoiceRepository;
+import com.vetsync.pms.adapter.out.persistence.repository.MedicationRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.MedicalRecordEntryRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.PatientRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.PaymentRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.PrescriptionRepository;
+import com.vetsync.pms.adapter.out.persistence.repository.PrescriptionItemRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.SpeciesRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.StaffRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.VisitRepository;
@@ -52,8 +54,10 @@ class PmsApplicationServiceBehaviorTests {
     @Mock private VisitRepository visits;
     @Mock private PrescriptionRepository prescriptions;
     @Mock private InvoiceRepository invoices;
+    @Mock private MedicationRepository medications;
     @Mock private PaymentRepository payments;
     @Mock private MedicalRecordEntryRepository history;
+    @Mock private PrescriptionItemRepository prescriptionItems;
     @Mock private SpeciesRepository species;
     @Mock private BreedRepository breeds;
 
@@ -62,7 +66,8 @@ class PmsApplicationServiceBehaviorTests {
     @BeforeEach
     void setUp() {
         service = new PmsApplicationService(clinics, staff, clients, patients, visits, prescriptions,
-                invoices, payments, history, species, breeds, Clock.fixed(NOW, ZoneOffset.UTC));
+                invoices, medications, payments, history, prescriptionItems, species, breeds,
+                Clock.fixed(NOW, ZoneOffset.UTC));
     }
 
     @Test
@@ -127,6 +132,48 @@ class PmsApplicationServiceBehaviorTests {
     }
 
     @Test
+    void givenADraftInvoiceWhenIssuedThenStatusChangesWithoutChangingItsAmountsOrDates() {
+        InvoiceEntity invoice = invoice(10L, InvoiceEntity.InvoiceStatus.DRAFT, "100.00", "0.00");
+        when(invoices.findByTenantIdAndId("SW", 10L)).thenReturn(Optional.of(invoice));
+        when(invoices.saveAndFlush(invoice)).thenReturn(invoice);
+
+        var issued = service.issueInvoice("SW", 10L);
+
+        assertThat(issued.status()).isEqualTo("ISSUED");
+        assertThat(issued.totalAmount()).isEqualByComparingTo("100.00");
+        assertThat(issued.paidAmount()).isEqualByComparingTo("0.00");
+        assertThat(invoice.getStatus()).isEqualTo(InvoiceEntity.InvoiceStatus.ISSUED);
+    }
+
+    @Test
+    void givenAnInvoiceWhenUpdatedWithAStatusChangeThenTheRequestIsRejected() {
+        InvoiceEntity invoice = invoice(10L, InvoiceEntity.InvoiceStatus.DRAFT, "100.00", "0.00");
+        when(invoices.findByTenantIdAndId("SW", 10L)).thenReturn(Optional.of(invoice));
+        InvoiceRequest request = new InvoiceRequest(1L, 2L, null, "INV-TEST", "ISSUED",
+                invoice.getIssuedOn(), invoice.getDueOn(), "EUR",
+                new BigDecimal("100.00"), BigDecimal.ZERO);
+
+        assertThatThrownBy(() -> service.updateInvoice("SW", 10L, request))
+                .isInstanceOf(PmsInvalidRequestException.class)
+                .hasMessage("Invoice status can only be changed through issue, void, and payment actions");
+
+        verify(invoices, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void givenAPartiallyPaidInvoiceWhenVoidedThenTheRequestIsRejected() {
+        InvoiceEntity invoice = invoice(10L, InvoiceEntity.InvoiceStatus.PARTIALLY_PAID, "100.00", "20.00");
+        when(invoices.findByTenantIdAndId("SW", 10L)).thenReturn(Optional.of(invoice));
+
+        assertThatThrownBy(() -> service.voidInvoice("SW", 10L))
+                .isInstanceOf(PmsInvalidRequestException.class)
+                .hasMessage("An invoice with payments cannot be voided");
+
+        verify(invoices, never()).saveAndFlush(any());
+        assertThat(invoice.getStatus()).isEqualTo(InvoiceEntity.InvoiceStatus.PARTIALLY_PAID);
+    }
+
+    @Test
     void givenARegionCodeWhenMappedThenOnlySupportedTenantCodesAreReturned() {
         assertThat(service.tenant("sw")).isEqualTo("SW");
         assertThat(service.tenant("se")).isEqualTo("SE");
@@ -174,6 +221,7 @@ class PmsApplicationServiceBehaviorTests {
         ClinicEntity clinic = clinic(1L);
         ClientEntity client = new ClientEntity("SW", clinic, "Synthetic", "Owner",
                 null, null, null, null, null, null);
+        ReflectionTestUtils.setField(client, "id", 2L);
         InvoiceEntity invoice = new InvoiceEntity("SW", clinic, client, null, "INV-TEST", status,
                 LocalDate.parse("2026-09-30"), LocalDate.parse("2026-10-14"), "EUR",
                 new BigDecimal(total), new BigDecimal(paid));
