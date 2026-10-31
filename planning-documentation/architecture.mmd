@@ -1,16 +1,41 @@
 flowchart LR
-  A[pms-api: Spring Boot REST CRUD] -->|reads and writes| B[MySQL: 6 regional schemas]
-  B --> C[Business tables: clinic, client, patient, visit, prescription, invoice]
-  C -->|triggers| D[Audit tables: master data, visit, prescription, invoice]
-  D -->|read-only polling| G[PollStreamUseCase: audit streams and time-window scans]
-  C -->|expiry and unpaid scans| G
-  E[sync-service worker: master-data listener] --> G
-  F[Container Apps Jobs: cron polling] --> G
-  G <-->|pointers, leases, dedupe| H[NoSQL: Mongo or Cosmos]
-  G -->|SyncEnvelope events| I[Azure Service Bus: queue or topic and DLQ]
-  I --> J[action-engine: consumer and inbox idempotency]
-  J --> K[Anti-corruption layer: Contact, CareSubject, Treatment, Receivable]
-  K --> L[Rules engine]
-  L -->|persist actions| M[PostgreSQL: action engine domain]
-  M --> N[Dispatcher: email, SMS, staff task]
-  N --> O[Owners and clinic staff]
+  subgraph PMS["PMS - source of truth"]
+    API["pms-api"]
+    BIZ[("MySQL business tables")]
+    AUDIT[("audit_master_data<br/>trigger snapshots")]
+    API -->|writes| BIZ
+    BIZ -->|triggers| AUDIT
+  end
+
+  subgraph SYNC["sync-service - implemented master-data path"]
+    POLL["Scheduled poller<br/>tenant-scoped<br/>5s safety lag + overlap"]
+    CONVERT["Build v1 SyncEnvelope<br/>stable eventId"]
+    POINTER[("MongoDB<br/>tenant/stream pointer")]
+    PUB["Rabbit publisher<br/>wait for broker confirm"]
+    POLL --> CONVERT --> PUB
+    POLL <-->|advance only after confirm| POINTER
+  end
+
+  subgraph BROKER["Local RabbitMQ"]
+    EXCHANGE["vetsync.sync exchange"]
+    QUEUE["action-engine queue"]
+    DLQ["action-engine DLQ"]
+    EXCHANGE --> QUEUE
+    QUEUE -. "rejected processing" .-> DLQ
+  end
+
+  subgraph ACTION["action-engine - implemented master-data path"]
+    LISTENER["Rabbit listener"]
+    MAP["Validate + map<br/>Clinic → Site<br/>Client → Contact<br/>Patient → CareSubject"]
+    TX["One PostgreSQL transaction<br/>inbox + source-version upsert"]
+    PG[("PostgreSQL<br/>site, contact, care_subject,<br/>processed_event")]
+    LISTENER --> MAP --> TX --> PG
+  end
+
+  AUDIT -->|"read-only JDBC; resolve patient owner public ID"| POLL
+  PUB -->|"JSON v1; at-least-once"| EXCHANGE
+  QUEUE --> LISTENER
+
+  FUTURE["Planned: other audit streams, snapshots,<br/>time-window scans, action rules and dispatch;<br/>Azure Service Bus adapter remains open"]
+  FUTURE -.-> SYNC
+  FUTURE -.-> ACTION

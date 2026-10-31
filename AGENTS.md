@@ -8,11 +8,11 @@ This repository contains three independently deployable Java 21 / Spring Boot 3.
 - `services/sync-service`: reads PMS data and audit streams, tracks synchronization state, and publishes events.
 - `services/action-engine`: consumes published events and owns its domain, persistence, rules, and dispatch.
 
-The root `pom.xml` is the Maven reactor. There is not yet a shared `sync-contracts` module, Maven Wrapper, Docker Compose setup, or Azure infrastructure. Do not claim those are implemented or introduce cross-service contract types until the contract module has been added.
+The root `pom.xml` is the Maven reactor and includes the non-deployable `libs/sync-contracts` module. Service-local Compose files provide MySQL, MongoDB, RabbitMQ, PostgreSQL, and Mailpit; there is no aggregate local stack. The Maven Wrapper is not present. Terraform provides an Azure infrastructure scaffold but does not deploy the application containers. Local RabbitMQ is implemented; the production Azure Service Bus adapter remains open.
 
 ## Engineering rules
 
-- Make focused changes that preserve the service boundaries. The sync service accesses PMS data read-only; the action engine must not access MySQL or depend on PMS classes.
+- Make focused changes that preserve the service boundaries. The sync service accesses PMS data read-only; the action engine must not access MySQL or depend on PMS classes. Shared event types belong in `libs/sync-contracts`.
 - Follow test-first development for behavior changes: add a failing test, implement the smallest correct change, then refactor.
 - Keep business rules in domain/application code, not controllers or persistence adapters. Prefer ports and adapters at integration boundaries.
 - Inject `java.time.Clock` wherever domain behavior depends on current time. Do not call `Instant.now()` in domain code.
