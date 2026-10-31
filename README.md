@@ -303,7 +303,7 @@ mvn -f services/sync-service/pom.xml spring-boot:run
 mvn -f services/action-engine/pom.xml spring-boot:run
 ```
 
-The sync worker currently polls `audit_master_data`; it publishes only after a RabbitMQ publisher confirmation and advances its MongoDB pointer only after that confirmation. Action Engine acknowledges successful processing after the PostgreSQL inbox and domain changes commit. Failed deliveries are rejected to `vetsync.action-engine.dlq`. The stream's overlapping lookback intentionally permits at-least-once duplicate delivery.
+The sync worker currently polls `audit_master_data`; it publishes only after a RabbitMQ publisher confirmation and advances its MongoDB pointer only after that confirmation. Action Engine acknowledges successful processing after the PostgreSQL inbox and domain changes commit. Processing is retried up to three times by default; failures are then rejected to `vetsync.action-engine.dlq`. Override attempts and initial delay with `ACTION_EVENT_MAX_ATTEMPTS` and `ACTION_EVENT_RETRY_DELAY`. The stream's overlapping lookback intentionally permits at-least-once duplicate delivery.
 
 ### Azure foundation (Terraform)
 
@@ -481,7 +481,7 @@ The planning draft calls for Hibernate/JPA, Liquibase, API integration tests, JW
 
 | Stream | Type | Source | Trigger |
 |--------|------|--------|---------|
-| `master-data` | change-log | `audit_master_data` | Short interval (long-running listener, e.g. every 2–5 s) |
+| `master-data` | change-log | `audit_master_data` | Scheduled poller (default every 5 s) |
 | `visits` | change-log | `audit_visit` | Timer job |
 | `prescriptions` | change-log | `audit_prescription` | Timer job |
 | `invoices` | change-log | `audit_invoice` | Timer job |
@@ -535,7 +535,7 @@ The pointer is advanced monotonically after each confirmed publish. No lease or 
 ### 8.6 Failure handling
 - The sync pointer advances only after a positive RabbitMQ publisher confirmation. If publishing fails, polling fails and the cursor is not advanced.
 - If the process stops after publishing but before updating MongoDB, the same deterministic event may be published again; the Action Engine PostgreSQL inbox makes the repeat idempotent.
-- Action Engine writes its inbox claim and mapped domain record in one PostgreSQL transaction. Failed processing is rejected to the configured dead-letter queue; replay/alerting is operational follow-up, not implemented.
+- Action Engine writes its inbox claim and mapped domain record in one PostgreSQL transaction. Processing retries up to three times by default, then a rejected message is sent to the configured dead-letter queue; replay/alerting is operational follow-up, not implemented.
 
 ### 8.7 Current implementation status
 

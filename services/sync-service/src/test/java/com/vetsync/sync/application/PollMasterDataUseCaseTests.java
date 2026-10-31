@@ -63,6 +63,14 @@ class PollMasterDataUseCaseTests {
         verify(progress, never()).advance(any(), any(), anyLong());
     }
 
+    @Test
+    void createsTheSameEventIdentityWhenAnAuditRowIsReplayed() {
+        AuditChange change = auditChange();
+
+        assertThat(useCase.envelopeFor(change).eventId())
+                .isEqualTo(useCase.envelopeFor(change).eventId());
+    }
+
     private AuditChange auditChange() {
         ObjectNode payload = objectMapper.createObjectNode()
                 .put("first_name", "Synthetic")

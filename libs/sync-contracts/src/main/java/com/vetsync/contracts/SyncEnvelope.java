@@ -28,7 +28,7 @@ public record SyncEnvelope(
         }
         require(eventId, "eventId");
         require(correlationId, "correlationId");
-        if (!TENANTS.contains(tenant)) {
+        if (tenant == null || !TENANTS.contains(tenant)) {
             throw new IllegalArgumentException("Unsupported tenant: " + tenant);
         }
         requireText(stream, "stream");

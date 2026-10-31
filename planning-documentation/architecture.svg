@@ -90,7 +90,7 @@
   <rect class="node" x="1160" y="310" width="370" height="125"/>
   <text class="node-title" x="1180" y="344">Anti-corruption mapping</text>
   <text class="body" x="1180" y="369">CLINIC → Site; CLIENT → Contact</text>
-  <text class="body" x="1180" y="391">PATIENT → CareSubject</text>
+  <text class="body" x="1180" y="391">PATIENT → CareSubject + species code</text>
   <text class="body" x="1180" y="413">DELETE → inactive; stale versions ignored</text>
   <rect class="node" x="1160" y="500" width="370" height="135"/>
   <text class="node-title" x="1180" y="534">One PostgreSQL transaction</text>

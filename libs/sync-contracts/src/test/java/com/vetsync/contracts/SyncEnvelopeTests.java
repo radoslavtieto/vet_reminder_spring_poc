@@ -56,5 +56,10 @@ class SyncEnvelopeTests {
                 UUID.randomUUID(), SyncOperation.UPSERT, 1, Instant.EPOCH, Instant.EPOCH,
                 objectMapper.createObjectNode()))
                 .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new SyncEnvelope(
+                1, UUID.randomUUID(), UUID.randomUUID(), null, "master-data", "CLIENT",
+                UUID.randomUUID(), SyncOperation.UPSERT, 1, Instant.EPOCH, Instant.EPOCH,
+                objectMapper.createObjectNode()))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }
