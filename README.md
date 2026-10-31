@@ -160,32 +160,86 @@ Rules:
 ## 6. Running locally (Windows 11 and Ubuntu)
 
 **Prerequisites**
-- JDK 21, Git
-- Docker: **Docker Desktop with WSL2 backend** on Windows 11, Docker Engine on Ubuntu (Testcontainers needs a working Docker daemon on both)
-- Maven 3.9.9 (until the Maven Wrapper is added in Phase 0).
+- JDK 21 and Maven 3.9.x (the repository does not yet include Maven Wrapper)
+- Docker with Docker Compose: Docker Desktop with WSL2 on Windows 11, or Docker Engine on Ubuntu
 
-**Commands (same on both OSes, apart from the wrapper name)**
+### Run the PMS API locally
 
-```bash
-docker compose -f infra/docker/docker-compose.yml up -d     # MySQL, Postgres, Mongo, messaging, Mailpit
-mvn clean verify                                         # all unit + integration tests
-mvn -pl services/pms-api spring-boot:run -Dspring-boot.run.profiles=local
-mvn -pl services/sync-service spring-boot:run -Dspring-boot.run.profiles=local
-mvn -pl services/action-engine spring-boot:run -Dspring-boot.run.profiles=local
+The PMS API has its own MySQL Compose file; the all-services Compose stack described in older project notes is not present. Run these commands from the repository root.
+
+1. Start the local MySQL database:
+
+   ```text
+   docker compose -f infra/pms-api/docker-compose.yml up -d mysql
+   ```
+
+   Compose uses the local-only database `vetsync`, username `vetsync`, and password `local-only`. Flyway creates the tables automatically when the API starts.
+
+2. Set the required runtime configuration in the same terminal where you will run Maven. Generate a fresh Base64-encoded 32-byte JWT signing key; do not commit it or reuse it outside local development.
+
+   **Windows PowerShell**
+
+   ```powershell
+   $key = New-Object byte[] 32
+   $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+   $rng.GetBytes($key)
+   $env:PMS_JWT_SECRET = [Convert]::ToBase64String($key)
+   $rng.Dispose()
+
+   $env:DB_URL = 'jdbc:mysql://localhost:3306/vetsync?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC'
+   $env:DB_USERNAME = 'vetsync'
+   $env:DB_PASSWORD = 'local-only'
+   $env:PMS_BOOTSTRAP_ADMIN_SW_USERNAME = 'admin'
+   $env:PMS_BOOTSTRAP_ADMIN_SW_PASSWORD = 'local-only-change-this'
+   ```
+
+   **Ubuntu / Bash**
+
+   ```bash
+   export PMS_JWT_SECRET="$(openssl rand -base64 32)"
+   export DB_URL='jdbc:mysql://localhost:3306/vetsync?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC'
+   export DB_USERNAME='vetsync'
+   export DB_PASSWORD='local-only'
+   export PMS_BOOTSTRAP_ADMIN_SW_USERNAME='admin'
+   export PMS_BOOTSTRAP_ADMIN_SW_PASSWORD='local-only-change-this'
+   ```
+
+   The example admin password is for local use only; replace it with a private password of at least 12 characters. The first configured administrator is created only when that tenant has no PMS users. To bootstrap another region, set the corresponding `PMS_BOOTSTRAP_ADMIN_<TENANT>_USERNAME` and `PMS_BOOTSTRAP_ADMIN_<TENANT>_PASSWORD` variables (for example, `..._SE_...` for `se`).
+
+3. Start the API:
+
+   ```text
+   mvn -pl services/pms-api spring-boot:run
+   ```
+
+   The service listens on `http://localhost:8081`. The first startup applies Flyway migrations; wait for Spring Boot to report that the service has started.
+
+4. Open **Swagger UI** at [`http://localhost:8081/swagger-ui/index.html`](http://localhost:8081/swagger-ui/index.html). The OpenAPI document is at [`http://localhost:8081/v3/api-docs`](http://localhost:8081/v3/api-docs).
+
+5. In Swagger UI, use `POST /api/v1/{region}/auth/login` first. Enter `sw` for `{region}` and the bootstrap username/password, then select **Try it out** and **Execute**. Copy `accessToken` from the response, select **Authorize**, and paste the token value (without adding `Bearer`). Swagger will send it as a bearer token for the protected operations.
+
+6. Use the `sw` clinic endpoints to add, read, and update a record:
+   - `POST /api/v1/sw/clinics` with `{"name":"Sample Clinic","city":"Sample City","active":true}` creates a clinic; note its returned `id`.
+   - `GET /api/v1/sw/clinics/{id}` reads that clinic.
+   - `PUT /api/v1/sw/clinics/{id}` updates it; for example, send `{"name":"Updated Sample Clinic","city":"Sample City","active":true}`.
+
+   Each region is a separate tenant. Use `se`, `sc`, `ne`, `nw`, or `nc` only after bootstrapping a user for that tenant. The API requires authentication for business operations and enforces role permissions; Swagger documents the bearer-token requirement. Use synthetic data only.
+
+Stop the API with Ctrl+C. Stop MySQL when finished:
+
+```text
+docker compose -f infra/pms-api/docker-compose.yml down
 ```
 
-Local-only database credentials are declared in Compose for convenience; do not reuse them outside development. Stop the dependencies with `docker compose -f infra/docker/docker-compose.yml down` (add `-v` to remove their local data).
+Add `-v` only if you intend to delete the local database volume and all data in it.
 
-**Local infrastructure (docker-compose)**
+**Local infrastructure**
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| MySQL 8.4 | 3306 | One shared schema, created by Flyway |
-| PostgreSQL | 5432 | Action engine DB |
-| MongoDB | 27017 | Sync state |
-| RabbitMQ | 5672 (AMQP), 15672 (management UI) | Local messaging adapter |
-| Mailpit | 8025 (UI), 1025 (SMTP) | Catches outbound emails from the dispatcher |
-| `pms-api` | 8081 | REST API; workers have no HTTP listener in the initial scaffold |
+| MySQL 8.4 (`infra/pms-api/docker-compose.yml`) | 3306 | PMS shared schema; created by Flyway |
+| `pms-api` | 8081 | PMS REST API and Swagger UI |
+| PostgreSQL, MongoDB, RabbitMQ, Mailpit | — | No aggregate local Compose stack is currently checked in |
 
 ### Azure foundation (Terraform)
 
@@ -208,6 +262,8 @@ From `infra/terraform`, run `terraform init` and `terraform plan`; `terraform ap
 Six tenants, one per Bulgarian planning region, share **one MySQL schema**. Every PMS business row and audit row carries a `tenant_id` (`SW`, `SE`, `SC`, `NE`, `NW`, or `NC`); tenant-scoped unique keys and composite foreign keys keep tenant-owned records separate. The PMS database adapter, Flyway schema, and region-to-tenant API resolution are implemented in `services/pms-api`; sync polling remains future work.
 
 The PMS datasource is configured with `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD`; these are required at runtime and have no checked-in defaults.
+
+Openable SVG and editable Mermaid diagrams for the PMS schema and current local/Azure infrastructure are in [`services/pms-api/docs/diagrams`](services/pms-api/docs/diagrams/README.md).
 
 | Tenant code | Region |
 |-------------|--------|
@@ -315,12 +371,18 @@ Base path: `/api/v1/{region}` where `{region}` is one of the lowercase codes `sw
 | `/patients/{patientId}/visits` | list and create patient visits |
 | `/visits/{visitId}/prescriptions` | list and create prescriptions for a visit |
 | `/invoices/{invoiceId}/payments` | list/register payments; nested payment GET |
+| `/visits/{visitId}/status` | transition a visit through its allowed workflow states |
+| `/patients/{patientId}/clinic` | transfer an active patient to another active clinic when there are no open visits |
+| `/invoices/{invoiceId}/issue` and `/invoices/{invoiceId}/void` | issue draft invoices and void unpaid invoices |
+| `/prescriptions/{prescriptionId}/items` | list/add prescription items; controlled medication requires a licensed vet |
+| `/species`, `/species/{speciesId}/breeds`, `/medications` | read tenant-scoped catalogues |
+| `/auth/login`, `/users` | issue a tenant-bound JWT and create tenant users (admin only) |
 
 Client listing supports a simple `q` match over name, phone, or email; patient listing supports exact `microchip`; invoice listing supports `status`. Nested creation verifies that referenced parents and related records belong to the requested tenant and match the path parent. Payment registration checks the invoice balance and updates its paid amount/status.
 
-OpenAPI documentation and Swagger UI are available at `/v3/api-docs` and `/swagger-ui/index.html`. Spring Security and JWT authentication/authorization are not implemented yet, so the API must not be treated as authenticated or exposed to untrusted networks. ETag/If-Match optimistic concurrency, clinic transfer workflows, visit state-transition actions, invoice issue/void actions, species/breed/medication catalog endpoints, and prescription-item management are also not implemented by this API yet.
+OpenAPI documentation and Swagger UI are available at `/v3/api-docs` and `/swagger-ui/index.html`. Swagger UI exposes the bearer-token **Authorize** control: log in first, then authorize with the returned JWT before trying protected operations. API requests are tenant-bound to the region in the URL. `ADMIN` has full access; `VET` and `NURSE` can access clinical resources; `RECEPTION` can manage clients and invoices without access to patient medical records. User creation is admin-only. The first admin for each tenant is created from tenant-specific environment variables only when that tenant has no users; public registration is not available.
 
-The current API validates tenant/parent ownership, required fields and enum values, prescription date order, invoice paid totals, and payment balance. More involved workflow rules—such as immutable completed visits, medication catalogue/item management, and controlled-medication licensing—remain future work.
+The current API validates tenant/parent ownership, required fields and enum values, prescription date order, invoice paid totals, and payment balance. Visit status changes use explicit workflow transitions; invoice status and paid amounts cannot be changed through ordinary invoice updates. ETag/If-Match optimistic concurrency, Actuator/Micrometer monitoring with optional Azure export, and a configurable large-volume synthetic data generator remain future work. The reception-safe appointment workflow is also not yet exposed; the current visit resource includes clinical fields and is limited to clinical roles.
 
 ### 7.5 Technology and capability status
 
@@ -333,8 +395,11 @@ The planning draft calls for Hibernate/JPA, Liquibase, API integration tests, JW
 | Database migrations | Flyway is implemented and is the schema source of truth. Liquibase is in the planning draft but has not been adopted; changing migration tools requires an explicit decision. |
 | CRUD API and integration tests | Implemented for the resources and operations listed above; API and database integration tests use Testcontainers with MySQL. |
 | OpenAPI and Swagger UI | Implemented; endpoints are `/v3/api-docs` and `/swagger-ui/index.html`. |
-| Spring Security and JWT | Not implemented. |
+| Spring Security and JWT | Implemented with tenant-bound JWTs, BCrypt password hashes, per-tenant environment bootstrap for the initial admin, and role-based endpoint authorization. |
 | Actuator, Micrometer, Azure Monitor, and Application Insights | Not implemented for `pms-api`. |
+| Optimistic concurrency with ETags | Not implemented; the database version field is not yet exposed as an HTTP precondition. |
+| Visit, invoice, clinic-transfer, catalogue, and prescription-item workflows | Implemented with application-level validation and explicit action endpoints. |
+| Reception-safe appointment management | Not implemented; reception cannot access clinical visit routes. |
 
 **Local seed data:** `services/pms-api/src/main/resources/db/seed/local-seed.sql` contains a small, synthetic sample for the `SW` tenant and is intended for local use. A configurable large-volume data generator for realistic scale testing is future work; do not use real client or clinical data.
 
@@ -359,40 +424,63 @@ The planning draft calls for Hibernate/JPA, Liquibase, API integration tests, JW
 | `visits` | change-log | `audit_visit` | Timer job |
 | `prescriptions` | change-log | `audit_prescription` | Timer job |
 | `invoices` | change-log | `audit_invoice` | Timer job |
-| `prescription-expiry` | time-window scan | `prescription` where status=ACTIVE and `valid_until` ≤ today + N | Timer job (daily or hourly) |
-| `unpaid-invoices` | time-window scan | `invoice` where status ∈ {ISSUED, PARTIALLY_PAID} and `issued_on` ≥ today − 6 months | Timer job |
+| `prescription-expiry` | time-window scan | Active prescriptions where `valid_until` ≤ today + 30 calendar days, including active rows already past expiry | Timer job |
+| `unpaid-invoices` | time-window scan | Unpaid `ISSUED`/`PARTIALLY_PAID` invoices with `due_on` in the previous 6 months, after a 7-calendar-day grace period | Timer job |
 
-Each stream runs **per tenant** (6 × streams pointers).
+Time-window date calculations use `Europe/Sofia` by default (`SYNC_BUSINESS_ZONE` can override it). These scan defaults are configurable with `SYNC_EXPIRY_LEAD_DAYS`, `SYNC_UNPAID_INVOICE_LOOKBACK_MONTHS`, and `SYNC_INVOICE_GRACE_DAYS`.
+
+Each stream runs **per tenant**. Audit pointers and leases are scoped to each of the four audit streams and six tenants; time-window scans and snapshot runs use separate tenant-scoped leases. In worker mode, all four audit streams are polled every `SYNC_AUDIT_POLL_DELAY_MS` (default 5 seconds); time-window scans run every `SYNC_TIME_WINDOW_POLL_DELAY_MS` (default one hour).
 
 ### 8.3 Run modes
 
 The same Spring Boot image supports two modes, selected by configuration:
 
-- `sync.mode=worker`: long-running process with `@Scheduled` pollers (local dev, master-data listener).
+- `sync.mode=worker`: long-running process with scheduled polling of all four audit streams and the time-window scans.
 - `sync.mode=job` (`--sync.stream=invoices --sync.tenant=ALL`): run **one polling pass and exit**. This is what an Azure Container Apps Job (cron-triggered) executes.
 
-The polling logic itself is one class, `PollStreamUseCase`, called by both modes, so it is tested once.
+The same job mode also runs resumable snapshots and time-window scans. Each snapshot invocation processes one entity; initial progress is stored per tenant/entity. Partial snapshots accept an entity-wide scan, one public ID, or an `updated_at` time range. Supply a new `--sync.run-id` for each partial operation and reuse that same ID to resume it after a failure.
+
+Polling is disabled by default. To run a job, enable `SYNC_POLL_ENABLED`, `SYNC_MYSQL_ENABLED`, `SYNC_MONGO_ENABLED`, and `SYNC_SERVICE_BUS_ENABLED`; provide `SYNC_MYSQL_URL`, `SYNC_MYSQL_USERNAME`, `SYNC_MYSQL_PASSWORD`, `SYNC_MONGODB_URI`, `SYNC_MONGODB_DATABASE`, `SERVICEBUS_QUEUE`, and either `SERVICEBUS_CONNECTION_STRING` or `SERVICEBUS_NAMESPACE`.
+
+When Service Bus is enabled, also configure a distinct `SERVICEBUS_QUARANTINE_QUEUE`. Send retries use `SYNC_EVENT_MAX_ATTEMPTS` (default 3) and `SYNC_EVENT_RETRY_DELAY` (default `PT1S`). Repeatedly failed sends are copied with their original envelope and failure type/reason to the quarantine queue; cursor/progress can advance only after that quarantine send succeeds. If quarantine also fails, the original operation fails and progress remains unchanged. Quarantined events are not automatically replayed; operators must inspect and replay them after remediation, relying on consumer idempotency.
+
+```text
+--sync.mode=job --sync.operation=initial --sync.entity=client --sync.tenant=SW
+--sync.mode=job --sync.operation=partial --sync.entity=client --sync.tenant=SW --sync.run-id=manual-replay-1 --sync.public-id=<public-uuid>
+--sync.mode=job --sync.operation=partial --sync.entity=client --sync.tenant=SW --sync.run-id=manual-replay-2 --sync.updated-from=2026-10-01T00:00:00Z --sync.updated-to=2026-11-01T00:00:00Z
+--sync.mode=job --sync.stream=unpaid-invoices --sync.tenant=ALL
+```
+
+The time-range start is inclusive and its end is exclusive; timestamps must be ISO-8601 instants. Partial snapshot control is exposed through job arguments, not an HTTP admin API. The polling and scan use cases are shared between the worker and job modes.
 
 ### 8.4 NoSQL state model
 
 Collections (or containers, when on Cosmos):
 
 ```jsonc
-// pointers: one doc per (tenant, stream)
-{ "_id": "SW:invoices", "lastAuditId": 18422, "lastChangedAt": "2026-09-30T08:15:03Z",
-  "lastRunAt": "...", "status": "IDLE|RUNNING|FAILED", "lastError": null }
+// sync_pointers: one document per audit stream (tenant, stream)
+{ "_id": "SW:invoices", "tenant": "SW", "stream": "invoices", "lastAuditId": 18422 }
 
-// leases: prevents two instances polling the same (tenant, stream)
-{ "_id": "SW:invoices", "owner": "instance-id", "expiresAt": "..." }   // TTL-indexed
+// sync_leases: lease expiry is checked during acquisition/renewal (no TTL index)
+{ "_id": "SW:invoices", "owner": "instance-id", "expiresAt": "..." }
 
-// processed: deduplication
-{ "_id": "SW:invoice:9912:v7", "processedAt": "...", "expiresAt": "..." } // TTL, e.g. 30 days
+// processed_events: deduplication; TTL index expires processedAt after configured retention
+{ "_id": "SW:INVOICE:public-uuid:v7", "processedAt": "..." }
 
-// initial-sync progress
-{ "_id": "SW:patient", "lastId": 45000, "state": "IN_PROGRESS|DONE", "startedAt": "..." }
+// snapshot_progress: resumable initial and named partial runs per tenant/entity
+{ "_id": "SW:client:initial", "tenant": "SW", "entity": "client", "runId": "initial",
+  "lastId": 45000, "state": "IN_PROGRESS|DONE" }
+
+// sync_runs: one lifecycle record per worker/job tenant and scope invocation
+{ "_id": "run-uuid", "tenant": "SW", "scope": "invoices",
+  "status": "RUNNING|COMPLETED|FAILED", "startedAt": "...", "finishedAt": "...",
+  "errorType": "IllegalStateException" }
 ```
 
+Run records are retained in MongoDB without an automatic expiry policy; operational retention/cleanup is not yet automated.
+
 Dedupe key = `tenant + entityType + publicId + rowVersion` (for time-window scans, add the scan date and rule name, e.g. `...:prescription-expiry:2026-09-30`).
+Snapshot partial runs append their run scope to the dedupe key; initial snapshots use the standard entity/version dedupe key so overlapping audit and snapshot events remain idempotent.
 
 ### 8.5 Event contract (`libs/sync-contracts`)
 
@@ -415,12 +503,21 @@ Dedupe key = `tenant + entityType + publicId + rowVersion` (for time-window scan
 
 - Payload DTOs live in `sync-contracts` with JSON schema; **breaking changes bump `schemaVersion`**.
 - Publishing is **at-least-once**; the consumer must be idempotent.
-- Ordering: use the Service Bus **session id** = `tenant:aggregateRootId` (e.g. patient) if per-aggregate ordering matters (see D4).
+- The current publisher does not set Service Bus session IDs, so per-aggregate ordering is not guaranteed. Consumers must be idempotent and reject stale source versions where ordering can vary.
 
 ### 8.6 Failure handling
-- Advance the pointer **only after** the broker confirms publish.
-- Retries with backoff (Resilience4j); poison events → dead-letter queue + alert.
-- Admin endpoints (secured): `POST /admin/sync/initial`, `POST /admin/sync/partial`, `GET /admin/sync/status`.
+- Advance the pointer **only after** the broker confirms publish or the quarantine queue confirms durable storage.
+- Each worker/job invocation persists a `sync_runs` lifecycle record (`RUNNING`, then `COMPLETED` or `FAILED`) in MongoDB. A failed operation records its exception type; a status-store failure is surfaced rather than silently ignored.
+- The publisher retries sends up to `SYNC_EVENT_MAX_ATTEMPTS`, then quarantines the envelope to `SERVICEBUS_QUARANTINE_QUEUE`. Progress advances only after either normal publishing or durable quarantine succeeds. Failure to publish and quarantine remains an operation failure.
+- The sync service does not provide HTTP admin endpoints or automated quarantine replay/alerting. Snapshot initiation and partial-sync filters are provided by job arguments; operators must inspect and replay quarantined messages after remediation.
+
+### 8.7 Current implementation status
+
+The sync-service contains the v1 contract, tenant-scoped audit polling for the four streams, keyset-based snapshots for the 14 PMS business entities, prescription-expiry and unpaid-invoice scans, Mongo-backed pointers/leases/deduplication/snapshot progress/run status, and an Azure Service Bus publisher with bounded retries and quarantine. MySQL, Mongo state, Service Bus, and polling are opt-in through configuration; no deployment or live broker/database integration is implied by unit tests.
+
+The current PMS audit-trigger migration emits changes for `clinic`, `client`, `patient`, `visit`, `medical_record_entry`, `prescription`, `prescription_item`, `invoice`, `invoice_line`, and `payment`. Snapshot support also covers `staff`, `species`, `breed`, and `medication`, but the current PMS migration does not emit audit events for those four tables, so later changes to them are not continuously propagated. The sync-service does not alter PMS schema or write behavior.
+
+Contract tests currently cover envelope validation and serialization; a Spring Cloud Contract or Pact compatibility suite has not been selected. Live Mongo/Cosmos and Service Bus integration, deployment, automated quarantine replay, and dead-letter alerting remain unverified or unimplemented.
 
 ---
 
