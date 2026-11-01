@@ -1,0 +1,303 @@
+%% Relationship edges represent composite foreign keys on (tenant_id, referenced id).
+%% Audit entity_id/public_id are trigger-populated source identifiers, not declared foreign keys.
+erDiagram
+    clinic {
+        BIGINT id PK
+        CHAR tenant_id
+        CHAR public_id
+        VARCHAR name
+        VARCHAR city
+        VARCHAR address
+        VARCHAR phone
+        VARCHAR email
+        BOOLEAN active
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BIGINT version
+        TIMESTAMP deleted_at
+    }
+    staff {
+        BIGINT id PK
+        CHAR tenant_id
+        CHAR public_id
+        BIGINT clinic_id FK
+        VARCHAR role
+        VARCHAR full_name
+        VARCHAR license_no
+        BOOLEAN active
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BIGINT version
+        TIMESTAMP deleted_at
+    }
+    client {
+        BIGINT id PK
+        CHAR tenant_id
+        CHAR public_id
+        BIGINT registered_clinic_id FK
+        VARCHAR first_name
+        VARCHAR last_name
+        VARCHAR email
+        VARCHAR phone
+        VARCHAR address
+        VARCHAR city
+        VARCHAR preferred_contact
+        TIMESTAMP gdpr_consent_at
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BIGINT version
+        TIMESTAMP deleted_at
+    }
+    pms_user {
+        BIGINT id PK
+        CHAR tenant_id
+        VARCHAR username
+        VARCHAR password_hash
+        VARCHAR role
+        BIGINT staff_id FK
+        BOOLEAN enabled
+        TIMESTAMP created_at
+    }
+    species {
+        BIGINT id PK
+        CHAR tenant_id
+        CHAR public_id
+        VARCHAR code
+        VARCHAR name
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BIGINT version
+        TIMESTAMP deleted_at
+    }
+    breed {
+        BIGINT id PK
+        CHAR tenant_id
+        CHAR public_id
+        BIGINT species_id FK
+        VARCHAR code
+        VARCHAR name
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BIGINT version
+        TIMESTAMP deleted_at
+    }
+    patient {
+        BIGINT id PK
+        CHAR tenant_id
+        CHAR public_id
+        BIGINT client_id FK
+        BIGINT clinic_id FK
+        VARCHAR name
+        BIGINT species_id FK
+        BIGINT breed_id FK
+        VARCHAR sex
+        DATE birth_date
+        VARCHAR microchip_no
+        BOOLEAN neutered
+        DECIMAL weight_kg
+        VARCHAR status
+        TIMESTAMP deceased_at
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BIGINT version
+        TIMESTAMP deleted_at
+    }
+    visit {
+        BIGINT id PK
+        CHAR tenant_id
+        CHAR public_id
+        BIGINT patient_id FK
+        BIGINT clinic_id FK
+        BIGINT vet_id FK
+        VARCHAR visit_type
+        VARCHAR status
+        TIMESTAMP scheduled_at
+        TIMESTAMP started_at
+        TIMESTAMP completed_at
+        VARCHAR reason
+        VARCHAR diagnosis
+        TEXT notes
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BIGINT version
+        TIMESTAMP deleted_at
+    }
+    medical_record_entry {
+        BIGINT id PK
+        CHAR tenant_id
+        CHAR public_id
+        BIGINT patient_id FK
+        BIGINT visit_id FK
+        VARCHAR entry_type
+        TEXT description
+        TIMESTAMP recorded_at
+        VARCHAR recorded_by
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BIGINT version
+        TIMESTAMP deleted_at
+    }
+    medication {
+        BIGINT id PK
+        CHAR tenant_id
+        CHAR public_id
+        VARCHAR code
+        VARCHAR name
+        VARCHAR form
+        VARCHAR strength
+        BOOLEAN controlled
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BIGINT version
+        TIMESTAMP deleted_at
+    }
+    prescription {
+        BIGINT id PK
+        CHAR tenant_id
+        CHAR public_id
+        BIGINT patient_id FK
+        BIGINT visit_id FK
+        BIGINT vet_id FK
+        VARCHAR status
+        DATE issued_on
+        DATE valid_until
+        TEXT notes
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BIGINT version
+        TIMESTAMP deleted_at
+    }
+    prescription_item {
+        BIGINT id PK
+        CHAR tenant_id
+        CHAR public_id
+        BIGINT prescription_id FK
+        BIGINT medication_id FK
+        VARCHAR dosage
+        VARCHAR frequency
+        INT duration_days
+        DECIMAL quantity
+        INT refills_allowed
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BIGINT version
+        TIMESTAMP deleted_at
+    }
+    invoice {
+        BIGINT id PK
+        CHAR tenant_id
+        CHAR public_id
+        BIGINT clinic_id FK
+        BIGINT client_id FK
+        BIGINT visit_id FK
+        VARCHAR invoice_no
+        VARCHAR status
+        DATE issued_on
+        DATE due_on
+        CHAR currency
+        DECIMAL total_amount
+        DECIMAL paid_amount
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BIGINT version
+        TIMESTAMP deleted_at
+    }
+    invoice_line {
+        BIGINT id PK
+        CHAR tenant_id
+        CHAR public_id
+        BIGINT invoice_id FK
+        VARCHAR description
+        DECIMAL quantity
+        DECIMAL unit_price
+        DECIMAL vat_rate
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BIGINT version
+        TIMESTAMP deleted_at
+    }
+    payment {
+        BIGINT id PK
+        CHAR tenant_id
+        CHAR public_id
+        BIGINT invoice_id FK
+        TIMESTAMP paid_at
+        DECIMAL amount
+        VARCHAR method
+        TIMESTAMP created_at
+        TIMESTAMP updated_at
+        BIGINT version
+        TIMESTAMP deleted_at
+    }
+    audit_master_data {
+        BIGINT audit_id PK
+        CHAR tenant_id
+        VARCHAR entity_type
+        BIGINT entity_id
+        CHAR public_id
+        VARCHAR operation
+        BIGINT row_version
+        TIMESTAMP changed_at
+        VARCHAR changed_by
+        JSON payload
+    }
+    audit_visit {
+        BIGINT audit_id PK
+        CHAR tenant_id
+        VARCHAR entity_type
+        BIGINT entity_id
+        CHAR public_id
+        VARCHAR operation
+        BIGINT row_version
+        TIMESTAMP changed_at
+        VARCHAR changed_by
+        JSON payload
+    }
+    audit_prescription {
+        BIGINT audit_id PK
+        CHAR tenant_id
+        VARCHAR entity_type
+        BIGINT entity_id
+        CHAR public_id
+        VARCHAR operation
+        BIGINT row_version
+        TIMESTAMP changed_at
+        VARCHAR changed_by
+        JSON payload
+    }
+    audit_invoice {
+        BIGINT audit_id PK
+        CHAR tenant_id
+        VARCHAR entity_type
+        BIGINT entity_id
+        CHAR public_id
+        VARCHAR operation
+        BIGINT row_version
+        TIMESTAMP changed_at
+        VARCHAR changed_by
+        JSON payload
+    }
+
+    clinic ||--o{ staff : employs
+    clinic ||--o{ client : registers
+    clinic ||--o{ patient : hosts
+    clinic ||--o{ visit : hosts
+    clinic ||--o{ invoice : issues
+    staff o|--o{ pms_user : optionally_linked
+    staff ||--o{ visit : attends
+    staff ||--o{ prescription : issues
+    client ||--o{ patient : owns
+    client ||--o{ invoice : billed_to
+    species ||--o{ breed : groups
+    species ||--o{ patient : classifies
+    breed o|--o{ patient : identifies
+    patient ||--o{ visit : has
+    patient ||--o{ medical_record_entry : has
+    visit o|--o{ medical_record_entry : documents
+    patient ||--o{ prescription : receives
+    visit ||--o{ prescription : supports
+    prescription ||--o{ prescription_item : contains
+    medication ||--o{ prescription_item : specifies
+    visit o|--o{ invoice : may_generate
+    invoice ||--o{ invoice_line : contains
+    invoice ||--o{ payment : receives

@@ -4,6 +4,7 @@ import com.vetsync.pms.adapter.in.web.dto.MedicalRecordEntryDto;
 import com.vetsync.pms.adapter.in.web.dto.PatientDto;
 import com.vetsync.pms.adapter.in.web.dto.VisitDto;
 import com.vetsync.pms.application.PmsApplicationService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -21,6 +22,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/{region}")
+@SecurityRequirement(name = "bearerAuth")
 public class PatientController {
 
     private final PmsApplicationService service;

@@ -1,0 +1,50 @@
+Sync-service decision questions and options
+==========================================
+
+This is a consolidated decision record for the sync-service implementation. Earlier questions are paraphrased from the implementation discussion; the options and selected answers are recorded here for future reference.
+
+1. What scope should the sync-service implementation cover?
+   Options:
+   - Roadmap Phase 3 only (master-data polling foundation).
+   - The complete sync-service scope from Phases 3, 5, and 6.
+   Selected: The complete sync-service scope from Phases 3, 5, and 6.
+
+2. How should unresolved README proposals be treated while implementing?
+   Options:
+   - Treat current proposals as provisional defaults and verify capabilities before depending on them.
+   - Pause implementation until every open architecture choice has a final decision.
+   Selected: Treat current proposals as provisional defaults, subject to verification.
+
+3. Should events guarantee per-aggregate ordering?
+   Options:
+   - Use Service Bus sessions to guarantee ordering per tenant/aggregate.
+   - Use at-least-once delivery without ordering guarantees; consumers must be idempotent and reject stale source versions where needed.
+   Selected: At-least-once delivery without aggregate-ordering guarantees.
+
+4. What business rules should the time-window scans use?
+   Prescription-expiry options considered:
+   - Scan active prescriptions within a lead-time window and include already-expired active records.
+   - Exclude already-expired records or use another expiry window.
+   Selected: Use 30 calendar days of lead time and include already-expired active prescriptions.
+
+   Unpaid-invoice lookback options considered:
+   - Base the six-month lookback on invoice issue date.
+   - Base the six-month lookback on invoice due date.
+   Selected: Base it on due date.
+
+   Overdue grace-period options considered:
+   - Apply a grace period before an invoice qualifies.
+   - Treat an unpaid invoice as overdue immediately on its due date.
+   Selected: Apply a seven-calendar-day grace period.
+
+   Date-zone options considered:
+   - Use UTC for calendar-date boundaries.
+   - Use the business-local calendar.
+   Selected: Use Europe/Sofia.
+
+5. How should failed-run status and repeatedly failing events be handled?
+   Options:
+   - Persist run status in MongoDB and quarantine repeatedly failing events to a separate Service Bus queue.
+   - Keep job exit codes and worker logs/retries; defer run-status storage and quarantine handling.
+   Selected: Persist run status in MongoDB and quarantine repeatedly failing events to a separate Service Bus queue.
+

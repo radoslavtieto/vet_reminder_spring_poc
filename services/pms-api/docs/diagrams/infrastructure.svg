@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="930" viewBox="0 0 1500 930" role="img" aria-labelledby="title description">
+  <title id="title">pms-api local and Azure infrastructure</title>
+  <desc id="description">Local MySQL and API setup alongside the Terraform Azure foundation. The Azure Terraform creates resources but does not deploy the pms-api container.</desc>
+  <defs>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; fill: #172b4d; }
+      .title { font-size: 30px; font-weight: 700; }
+      .subtitle { font-size: 15px; fill: #42526e; }
+      .section { font-size: 21px; font-weight: 700; }
+      .heading { font-size: 17px; font-weight: 700; }
+      .body { font-size: 15px; }
+      .small { font-size: 13px; fill: #42526e; }
+      .frame { fill: #fff; stroke: #aab8ca; stroke-width: 1.5; rx: 18; }
+      .node { fill: #eaf4ff; stroke: #1769aa; stroke-width: 2; rx: 13; }
+      .resource { fill: #edf8f1; stroke: #26734d; stroke-width: 2; rx: 13; }
+      .pending { fill: #fff5e8; stroke: #b36b00; stroke-width: 2; stroke-dasharray: 7 5; rx: 13; }
+      .line { stroke: #526b8b; stroke-width: 2.3; fill: none; marker-end: url(#arrow); }
+      .dashed { stroke: #b36b00; stroke-width: 2.3; fill: none; stroke-dasharray: 7 5; marker-end: url(#pending-arrow); }
+      .label { font-size: 13px; font-weight: 600; fill: #334e68; }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <path d="M0,0 L9,4 L0,8 Z" fill="#526b8b"/>
+    </marker>
+    <marker id="pending-arrow" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <path d="M0,0 L9,4 L0,8 Z" fill="#b36b00"/>
+    </marker>
+  </defs>
+  <rect width="1500" height="930" fill="#f8fafc"/>
+  <text x="52" y="57" class="title">pms-api · infrastructure</text>
+  <text x="52" y="87" class="subtitle">Local development path and the current Azure Terraform foundation (not a deployed application)</text>
+
+  <rect x="44" y="125" width="580" height="680" class="frame"/>
+  <text x="72" y="166" class="section">Local development</text>
+  <rect x="92" y="224" width="210" height="110" class="node"/>
+  <text x="112" y="260" class="heading">API client</text>
+  <text x="112" y="288" class="small">localhost</text>
+  <rect x="368" y="213" width="210" height="134" class="node"/>
+  <text x="387" y="250" class="heading">pms-api</text>
+  <text x="387" y="278" class="body">Spring Boot · :8081</text>
+  <text x="387" y="307" class="small">Maven run or Docker image</text>
+  <path d="M302 278 H358" class="line"/>
+  <text x="307" y="262" class="label">HTTP</text>
+
+  <rect x="368" y="470" width="210" height="138" class="node"/>
+  <text x="387" y="507" class="heading">MySQL 8.4</text>
+  <text x="387" y="535" class="body">Compose · :3306</text>
+  <text x="387" y="564" class="small">vetsync database</text>
+  <path d="M473 347 V460" class="line"/>
+  <text x="488" y="409" class="label">JDBC / DB_URL</text>
+
+  <rect x="92" y="457" width="210" height="96" class="node"/>
+  <text x="112" y="493" class="heading">Flyway</text>
+  <text x="112" y="520" class="small">V1 · V2 · V3 on API startup</text>
+  <path d="M302 505 H358" class="line"/>
+  <text x="306" y="489" class="label">migrates</text>
+  <rect x="92" y="635" width="486" height="102" class="node"/>
+  <text x="112" y="672" class="heading">Optional local seed profile</text>
+  <text x="112" y="700" class="small">Compose seed job loads synthetic data into the same MySQL service</text>
+  <path d="M335 635 V620 H473 V608" class="line"/>
+  <text x="344" y="617" class="label">seed</text>
+  <text x="72" y="775" class="small">Local Compose starts MySQL (and optional seed); it does not start the API.</text>
+
+  <rect x="660" y="125" width="796" height="680" class="frame"/>
+  <text x="688" y="166" class="section">Azure foundation · Terraform</text>
+  <rect x="710" y="220" width="190" height="120" class="pending"/>
+  <text x="730" y="258" class="heading">pms-api app</text>
+  <text x="730" y="286" class="body">not provisioned</text>
+  <text x="730" y="313" class="small">no Container App resource</text>
+
+  <rect x="1005" y="210" width="190" height="105" class="resource"/>
+  <text x="1025" y="247" class="heading">Container Apps</text>
+  <text x="1025" y="275" class="body">Environment only</text>
+  <text x="1025" y="299" class="small">no app deployment</text>
+  <path d="M900 275 H995" class="dashed"/>
+  <text x="909" y="259" class="label">future placement</text>
+
+  <rect x="1260" y="210" width="160" height="105" class="resource"/>
+  <text x="1278" y="247" class="heading">ACR</text>
+  <text x="1278" y="275" class="body">image registry</text>
+  <text x="1278" y="299" class="small">no release pipeline</text>
+  <rect x="710" y="425" width="190" height="120" class="resource"/>
+  <text x="730" y="463" class="heading">MySQL Flexible</text>
+  <text x="730" y="491" class="body">Server 8.0.21</text>
+  <text x="730" y="519" class="small">PMS database</text>
+  <path d="M805 340 V415" class="dashed"/>
+  <text x="820" y="388" class="label">future JDBC</text>
+
+  <rect x="1005" y="414" width="415" height="160" class="resource"/>
+  <text x="1025" y="451" class="heading">Virtual network</text>
+  <text x="1025" y="481" class="body">Container Apps subnet</text>
+  <text x="1025" y="510" class="body">Delegated MySQL subnet</text>
+  <text x="1025" y="543" class="small">Private DNS zone and VNet link for MySQL</text>
+  <path d="M900 485 H995" class="line"/>
+  <text x="919" y="469" class="label">private network</text>
+
+  <rect x="710" y="641" width="190" height="106" class="resource"/>
+  <text x="730" y="679" class="heading">Key Vault</text>
+  <text x="730" y="709" class="small">not wired to app</text>
+  <rect x="1005" y="641" width="190" height="106" class="resource"/>
+  <text x="1025" y="679" class="heading">App Insights</text>
+  <text x="1025" y="709" class="small">connection not wired</text>
+  <rect x="1260" y="641" width="160" height="106" class="resource"/>
+  <text x="1278" y="679" class="heading">Log Analytics</text>
+  <text x="1278" y="709" class="small">workspace</text>
+  <path d="M710 300 H680 V694 H700" class="dashed"/>
+  <text x="684" y="610" class="label">future secret injection</text>
+  <path d="M900 285 H960 V602 H1099 V631" class="dashed"/>
+  <text x="938" y="589" class="label">future telemetry wiring</text>
+  <path d="M1195 694 H1250" class="line"/>
+  <text x="1199" y="678" class="label">workspace</text>
+
+  <rect x="44" y="830" width="1412" height="66" class="pending"/>
+  <text x="72" y="858" class="body"><tspan font-weight="700">Important:</tspan> Terraform provisions the Azure foundation only. It does not create a pms-api Container App, push the image, inject application secrets, or configure telemetry.</text>
+  <text x="72" y="882" class="small">The pms-api Dockerfile builds a Java 21 image; Azure resources are defined in infra/terraform. Dashed connectors indicate absent/future wiring.</text>
+</svg>

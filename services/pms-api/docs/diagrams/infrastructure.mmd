@@ -1,0 +1,41 @@
+flowchart LR
+    subgraph LOCAL["Local development"]
+        DEV["Developer / API client"]
+        API["pms-api<br/>Spring Boot<br/>port 8081<br/>Maven run or Dockerfile"]
+        MYSQL["MySQL 8.4<br/>Docker Compose<br/>port 3306"]
+        SEED["Optional local seed<br/>Compose seed profile"]
+        FLYWAY["Flyway migrations<br/>V1, V2, V3"]
+        DEV --> API
+        API -->|"JDBC / DB_URL"| MYSQL
+        API -->|"applies on startup"| FLYWAY
+        SEED --> MYSQL
+    end
+
+    subgraph AZURE["Azure Terraform foundation (resources provisioned; application deployment is not)"]
+        CLIENT["API clients"]
+        APP["pms-api container deployment<br/>NOT provisioned by current Terraform"]
+        ACA["Container Apps Environment<br/>environment only; no app resource"]
+        ACR["Azure Container Registry<br/>image destination, no release pipeline"]
+        IMAGE["pms-api Dockerfile<br/>Java 21 runtime image"]
+        DB["Azure Database for MySQL<br/>Flexible Server 8.0.21"]
+        VNET["Virtual Network<br/>Container Apps subnet +<br/>delegated MySQL subnet"]
+        DNS["Private DNS zone<br/>and VNet link"]
+        KV["Key Vault<br/>secret integration not configured"]
+        OBS["Application Insights<br/>+ Log Analytics"]
+        CLIENT -. "future HTTPS route" .-> APP
+        APP -. "future JDBC connection" .-> DB
+        APP -. "future app placement" .-> ACA
+        IMAGE -. "future image push" .-> ACR
+        ACA --- VNET
+        DB --- VNET
+        DB --- DNS
+        APP -. "secret injection not configured" .-> KV
+        APP -. "connection string / telemetry wiring not configured" .-> OBS
+    end
+
+    classDef local fill:#eaf4ff,stroke:#1769aa,color:#102a43,stroke-width:1.5px;
+    classDef azure fill:#eef8f1,stroke:#26734d,color:#173b2b,stroke-width:1.5px;
+    classDef pending fill:#fff4e5,stroke:#b36b00,color:#4d3000,stroke-width:2px,stroke-dasharray:6 4;
+    class DEV,API,MYSQL,SEED,FLYWAY local;
+    class ACA,ACR,DB,VNET,DNS,KV,OBS,IMAGE azure;
+    class CLIENT,APP pending;

@@ -88,6 +88,19 @@ class PmsAuthenticationServiceTests {
     }
 
     @Test
+    void loginRejectsDisabledUsersBeforeCheckingTheirPassword() {
+        PmsUserEntity user = user("SW", "disabled@example.invalid", UserRole.ADMIN, null);
+        ReflectionTestUtils.setField(user, "enabled", false);
+        when(users.findByTenantIdAndUsername("SW", "disabled@example.invalid")).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> service.login("SW", "disabled@example.invalid", "strong-password"))
+                .isInstanceOf(BadCredentialsException.class)
+                .hasMessage("Invalid username or password");
+
+        verifyNoInteractions(passwordEncoder, jwtEncoder);
+    }
+
+    @Test
     void createUserHashesPasswordAndRequiresActiveStaffForClinicalRoles() {
         StaffEntity vet = new StaffEntity("SW", clinic(), StaffEntity.StaffRole.VET, "Synthetic Vet",
                 "LIC-TEST", true);
@@ -142,6 +155,19 @@ class PmsAuthenticationServiceTests {
         when(staff.findByTenantIdAndId("SW", 99L)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.createUser("SW",
                 new CreateUserRequest("nurse@example.invalid", "strong-password", UserRole.NURSE, 99L)))
+                .isInstanceOf(PmsResourceNotFoundException.class)
+                .hasMessage("Staff record not found");
+    }
+
+    @Test
+    void createUserRejectsInactiveStaff() {
+        when(users.existsByTenantIdAndUsername("SW", "nurse@example.invalid")).thenReturn(false);
+        StaffEntity inactiveNurse = new StaffEntity("SW", clinic(), StaffEntity.StaffRole.NURSE,
+                "Synthetic Nurse", null, false);
+        when(staff.findByTenantIdAndId("SW", 9L)).thenReturn(Optional.of(inactiveNurse));
+
+        assertThatThrownBy(() -> service.createUser("SW",
+                new CreateUserRequest("nurse@example.invalid", "strong-password", UserRole.NURSE, 9L)))
                 .isInstanceOf(PmsResourceNotFoundException.class)
                 .hasMessage("Staff record not found");
     }

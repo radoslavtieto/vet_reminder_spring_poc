@@ -18,6 +18,7 @@
     <name>VetSync POC</name>
 
     <modules>
+        <module>libs/sync-contracts</module>
         <module>services/pms-api</module>
         <module>services/sync-service</module>
         <module>services/action-engine</module>

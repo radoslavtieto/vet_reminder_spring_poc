@@ -4,6 +4,8 @@ import com.vetsync.pms.adapter.in.web.dto.AuthDto;
 import com.vetsync.pms.application.PmsApplicationService;
 import com.vetsync.pms.application.PmsAuthenticationService;
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -32,6 +34,7 @@ public class AuthController {
 
     @PostMapping("/users")
     @ResponseStatus(HttpStatus.CREATED)
+    @Operation(security = @SecurityRequirement(name = "bearerAuth"))
     public AuthDto.UserView createUser(@PathVariable String region,
                                        @Valid @RequestBody AuthDto.CreateUserRequest request) {
         return authentication.createUser(service.tenant(region), request);

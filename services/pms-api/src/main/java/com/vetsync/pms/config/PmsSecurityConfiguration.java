@@ -22,6 +22,8 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -35,6 +37,11 @@ import java.util.Base64;
 
 @Configuration
 public class PmsSecurityConfiguration {
+
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder(12);
+    }
 
     @Bean
     SecretKey jwtSecretKey(@Value("${pms.security.jwt-secret}") String encodedSecret) {

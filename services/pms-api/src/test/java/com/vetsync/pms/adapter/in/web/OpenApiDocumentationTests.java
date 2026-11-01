@@ -47,7 +47,11 @@ class OpenApiDocumentationTests {
                 .andExpect(content().contentTypeCompatibleWith("application/json"))
                 .andExpect(jsonPath("$.openapi").value("3.1.0"))
                 .andExpect(jsonPath("$.info.title").value("VetSync PMS API"))
-                .andExpect(jsonPath("$.paths['/api/v1/{region}/clinics']").exists());
+                .andExpect(jsonPath("$.paths['/api/v1/{region}/clinics']").exists())
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.type").value("http"))
+                .andExpect(jsonPath("$.paths['/api/v1/{region}/clinics'].get.security[0].bearerAuth")
+                        .isArray())
+                .andExpect(jsonPath("$.paths['/api/v1/{region}/auth/login'].post.security").doesNotExist());
 
         mockMvc.perform(get("/swagger-ui/index.html"))
                 .andExpect(status().isOk())

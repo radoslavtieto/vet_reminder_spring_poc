@@ -13,6 +13,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.core.env.Environment;
@@ -40,6 +46,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         PrescriptionController.class,
         InvoiceController.class
 })
+@Import(PmsApiValidationTests.PermitAllTestSecurityConfiguration.class)
 class PmsApiValidationTests {
 
     @Autowired
@@ -50,6 +57,16 @@ class PmsApiValidationTests {
 
     @MockitoBean
     private PmsApplicationService service;
+
+    @TestConfiguration
+    static class PermitAllTestSecurityConfiguration {
+        @Bean
+        SecurityFilterChain permitAllTestSecurityFilterChain(HttpSecurity http) throws Exception {
+            http.csrf(AbstractHttpConfigurer::disable)
+                    .authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll());
+            return http.build();
+        }
+    }
 
     @Test
     void configuresStructuredLogsAndServiceIdentity() {

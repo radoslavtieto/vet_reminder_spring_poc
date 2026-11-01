@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vetsync.example/schemas/sync-envelope-v1.schema.json",
+  "title": "VetSync SyncEnvelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "eventId",
+    "correlationId",
+    "tenant",
+    "stream",
+    "entityType",
+    "entityId",
+    "operation",
+    "sourceVersion",
+    "occurredAt",
+    "publishedAt",
+    "payload"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "eventId": { "type": "string", "format": "uuid" },
+    "correlationId": { "type": "string", "format": "uuid" },
+    "tenant": { "enum": ["SW", "SE", "SC", "NE", "NW", "NC"] },
+    "stream": {
+      "enum": [
+        "master-data",
+        "visits",
+        "prescriptions",
+        "invoices",
+        "prescription-expiry",
+        "unpaid-invoices"
+      ]
+    },
+    "entityType": { "type": "string", "minLength": 1 },
+    "entityId": { "type": "string", "format": "uuid" },
+    "operation": { "enum": ["UPSERT", "DELETE", "EXPIRY_DUE", "OVERDUE"] },
+    "sourceVersion": { "type": "integer", "minimum": 0 },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "publishedAt": { "type": "string", "format": "date-time" },
+    "payload": { "type": "object" }
+  }
+}

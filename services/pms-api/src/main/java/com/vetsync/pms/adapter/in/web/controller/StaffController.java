@@ -2,6 +2,7 @@ package com.vetsync.pms.adapter.in.web.controller;
 
 import com.vetsync.pms.adapter.in.web.dto.StaffDto;
 import com.vetsync.pms.application.PmsApplicationService;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -17,6 +18,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/{region}")
+@SecurityRequirement(name = "bearerAuth")
 public class StaffController {
 
     private final PmsApplicationService service;

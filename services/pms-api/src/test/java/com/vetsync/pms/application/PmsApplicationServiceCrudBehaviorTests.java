@@ -1,6 +1,7 @@
 package com.vetsync.pms.application;
 
 import com.vetsync.pms.adapter.in.web.dto.ClientDto.ClientRequest;
+import com.vetsync.pms.adapter.in.web.dto.ClinicDto.ClinicRequest;
 import com.vetsync.pms.adapter.in.web.dto.InvoiceDto.InvoiceRequest;
 import com.vetsync.pms.adapter.in.web.dto.MedicalRecordEntryDto.HistoryRequest;
 import com.vetsync.pms.adapter.in.web.dto.PatientDto.PatientRequest;
@@ -133,6 +134,24 @@ class PmsApplicationServiceCrudBehaviorTests {
     }
 
     @Test
+    void givenAClinicWhenCreatedUpdatedAndFetchedThenItsTenantAndUpdatesAreMapped() {
+        when(clinics.save(any())).thenAnswer(call -> entity(call.getArgument(0), 11L));
+        when(clinics.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
+        ClinicRequest request = new ClinicRequest("Updated Clinic", "Sample City",
+                "Synthetic address", "555-0101", "clinic@example.invalid", true);
+
+        var created = service.createClinic("SW", request);
+        var updated = service.updateClinic("SW", 1L, request);
+        var fetched = service.clinic("SW", 1L);
+
+        assertThat(created.id()).isEqualTo(11L);
+        assertThat(updated.name()).isEqualTo("Updated Clinic");
+        assertThat(fetched.city()).isEqualTo("Sample City");
+        verify(clinics).save(any(ClinicEntity.class));
+        verify(clinics).saveAndFlush(clinic);
+    }
+
+    @Test
     void givenStaffAtAClinicWhenManagedThenItsTenantAndClinicScopeArePreserved() {
         when(staff.findAllByTenantIdAndClinic_Id("SW", 1L)).thenReturn(List.of(vet));
         when(staff.findAllByTenantId("SW")).thenReturn(List.of(vet));
@@ -153,6 +172,29 @@ class PmsApplicationServiceCrudBehaviorTests {
         assertThat(all).hasSize(1);
         assertThat(found.fullName()).isEqualTo("Synthetic Vet");
         assertThat(updated.role()).isEqualTo("NURSE");
+        assertThat(vet.getDeletedAt()).isEqualTo(NOW);
+    }
+
+    @Test
+    void givenStaffWhenListedAndUpdatedThenClinicAssignmentAndSoftDeleteArePreserved() {
+        when(staff.findAllByTenantId("SW")).thenReturn(List.of(vet));
+        when(staff.findAllByTenantIdAndClinic_Id("SW", 1L)).thenReturn(List.of(vet));
+        when(staff.save(any())).thenAnswer(call -> entity(call.getArgument(0), 11L));
+        when(staff.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
+        StaffRequest request = new StaffRequest(null, "VET", "Synthetic Updated Vet", "LIC-2", true);
+
+        var created = service.createStaff("SW", 1L, request);
+        var all = service.staff("SW");
+        var forClinic = service.staffForClinic("SW", 1L);
+        var found = service.staff("SW", 4L);
+        var updated = service.updateStaff("SW", 4L, request);
+        service.deleteStaff("SW", 4L);
+
+        assertThat(created.id()).isEqualTo(11L);
+        assertThat(all).hasSize(1);
+        assertThat(forClinic).extracting(view -> view.fullName()).containsExactly("Synthetic Vet");
+        assertThat(found.role()).isEqualTo("VET");
+        assertThat(updated.fullName()).isEqualTo("Synthetic Updated Vet");
         assertThat(vet.getDeletedAt()).isEqualTo(NOW);
     }
 

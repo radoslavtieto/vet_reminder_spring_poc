@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1000" viewBox="0 0 1440 1000" role="img" aria-labelledby="title description">
+  <title id="title">PMS API database schema map</title>
+  <desc id="description">Overview of the pms-api MySQL schema domains, their tenant-scoped relationships, and four trigger-written audit streams.</desc>
+  <defs>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; fill: #172b4d; }
+      .title { font-size: 30px; font-weight: 700; }
+      .subtitle { font-size: 15px; fill: #42526e; }
+      .group-title { font-size: 19px; font-weight: 700; }
+      .body { font-size: 15px; }
+      .small { font-size: 13px; fill: #42526e; }
+      .panel { fill: #fff; stroke: #b7c4d6; stroke-width: 1.5; rx: 14; }
+      .business { fill: #f2f7ff; stroke: #2f6fbb; stroke-width: 2; rx: 14; }
+      .audit { fill: #f5f1ff; stroke: #7253a6; stroke-width: 2; rx: 14; }
+      .edge { stroke: #526b8b; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .audit-edge { stroke: #7253a6; stroke-width: 2.2; fill: none; stroke-dasharray: 7 6; marker-end: url(#audit-arrow); }
+      .label { font-size: 13px; font-weight: 600; fill: #334e68; }
+    </style>
+    <marker id="arrow" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <path d="M0,0 L9,4 L0,8 Z" fill="#526b8b"/>
+    </marker>
+    <marker id="audit-arrow" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+      <path d="M0,0 L9,4 L0,8 Z" fill="#7253a6"/>
+    </marker>
+  </defs>
+  <rect width="1440" height="1000" fill="#f8fafc"/>
+  <text x="54" y="58" class="title">pms-api · MySQL schema</text>
+  <text x="54" y="88" class="subtitle">19 tables across tenant-scoped business data, authentication, and trigger-written audit streams</text>
+
+  <rect x="50" y="130" width="390" height="276" class="business"/>
+  <text x="76" y="166" class="group-title">Clinics &amp; identity</text>
+  <text x="76" y="204" class="body">clinic</text>
+  <text x="76" y="232" class="body">staff  ·  client  ·  pms_user</text>
+  <text x="76" y="278" class="small">clinic → staff, client</text>
+  <text x="76" y="303" class="small">staff → pms_user (optional staff link)</text>
+  <text x="76" y="328" class="small">Each tenant-owned FK includes tenant_id</text>
+  <text x="76" y="371" class="small">Usernames are unique within each tenant</text>
+
+  <rect x="525" y="130" width="390" height="276" class="business"/>
+  <text x="551" y="166" class="group-title">Patients &amp; care</text>
+  <text x="551" y="204" class="body">species  →  breed</text>
+  <text x="551" y="232" class="body">client + clinic + species + breed → patient</text>
+  <text x="551" y="260" class="body">patient + clinic + staff → visit</text>
+  <text x="551" y="288" class="body">patient + visit → medical_record_entry</text>
+  <text x="551" y="335" class="small">breed_id and medical_record_entry.visit_id</text>
+  <text x="551" y="359" class="small">are nullable foreign keys</text>
+
+  <rect x="1000" y="130" width="390" height="276" class="business"/>
+  <text x="1026" y="166" class="group-title">Prescribing</text>
+  <text x="1026" y="204" class="body">patient + visit + staff → prescription</text>
+  <text x="1026" y="232" class="body">prescription → prescription_item</text>
+  <text x="1026" y="260" class="body">medication → prescription_item</text>
+  <text x="1026" y="315" class="small">prescription_item requires a parent</text>
+  <text x="1026" y="339" class="small">prescription and medication</text>
+  <text x="1026" y="371" class="small">Status, quantity and duration use checks</text>
+
+  <rect x="50" y="540" width="390" height="256" class="business"/>
+  <text x="76" y="576" class="group-title">Billing</text>
+  <text x="76" y="615" class="body">clinic + client + optional visit → invoice</text>
+  <text x="76" y="643" class="body">invoice → invoice_line</text>
+  <text x="76" y="671" class="body">invoice → payment</text>
+  <text x="76" y="724" class="small">Amounts, status, payment and line values</text>
+  <text x="76" y="748" class="small">are constrained in the schema</text>
+
+  <rect x="525" y="540" width="865" height="256" class="audit"/>
+  <text x="551" y="576" class="group-title">Audit streams · emitted by MySQL triggers</text>
+  <text x="551" y="617" class="body">audit_master_data</text>
+  <text x="551" y="642" class="small">clinic · client · patient</text>
+  <text x="551" y="686" class="body">audit_visit</text>
+  <text x="551" y="711" class="small">visit · medical_record_entry</text>
+  <text x="964" y="617" class="body">audit_prescription</text>
+  <text x="964" y="642" class="small">prescription · prescription_item</text>
+  <text x="964" y="686" class="body">audit_invoice</text>
+  <text x="964" y="711" class="small">invoice · invoice_line · payment</text>
+  <text x="551" y="765" class="small">Audit entity_id/public_id identify source rows in payloads; audit tables have no declared FKs.</text>
+
+  <path d="M440 266 H515" class="edge"/>
+  <text x="452" y="250" class="label">clinic / client / staff</text>
+  <path d="M915 266 H990" class="edge"/>
+  <text x="925" y="250" class="label">patient / visit / staff</text>
+  <path d="M722 406 V490 H430 V530" class="edge"/>
+  <text x="539" y="478" class="label">optional visit link</text>
+  <path d="M246 406 V506 H680 V530" class="audit-edge"/>
+  <path d="M720 406 V530" class="audit-edge"/>
+  <path d="M1195 406 V506 H1245 V530" class="audit-edge"/>
+  <path d="M440 690 H515" class="audit-edge"/>
+  <text x="784" y="482" class="label">business writes captured by AFTER INSERT / UPDATE triggers</text>
+
+  <rect x="50" y="848" width="1340" height="94" class="panel"/>
+  <text x="76" y="882" class="body"><tspan font-weight="700">Tenant isolation:</tspan> every business and audit row carries tenant_id; tenant-owned foreign keys reference a composite (tenant_id, id).</text>
+  <text x="76" y="912" class="small">All tables and columns are shown in database-schema.mmd. Source: Flyway V1, V2 and V3 migrations; relationship lines summarize declared foreign keys.</text>
+</svg>

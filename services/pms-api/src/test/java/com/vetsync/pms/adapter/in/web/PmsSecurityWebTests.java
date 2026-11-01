@@ -1,11 +1,12 @@
 package com.vetsync.pms.adapter.in.web;
 
-import com.vetsync.pms.adapter.in.web.dto.AuthDto;
 import com.vetsync.pms.adapter.in.web.dto.AuthDto.CreateUserRequest;
-import com.vetsync.pms.adapter.in.web.dto.AuthDto.LoginRequest;
 import com.vetsync.pms.adapter.in.web.dto.AuthDto.TokenResponse;
 import com.vetsync.pms.adapter.in.web.dto.AuthDto.UserView;
-import com.vetsync.pms.adapter.out.persistence.entity.PmsUserEntity.UserRole;
+import com.vetsync.pms.adapter.in.web.controller.AuthController;
+import com.vetsync.pms.adapter.in.web.controller.ClientController;
+import com.vetsync.pms.adapter.in.web.controller.InvoiceController;
+import com.vetsync.pms.adapter.in.web.controller.PatientController;
 import com.vetsync.pms.application.PmsApplicationService;
 import com.vetsync.pms.application.PmsAuthenticationService;
 import com.vetsync.pms.config.PmsSecurityConfiguration;
@@ -21,24 +22,29 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.time.Instant;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(controllers = com.vetsync.pms.adapter.in.web.controller.AuthController.class)
+@WebMvcTest(controllers = {AuthController.class, ClientController.class,
+        InvoiceController.class, PatientController.class},
+        properties = "pms.security.jwt-secret=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 @AutoConfigureMockMvc
 @Import(PmsSecurityConfiguration.class)
 class PmsSecurityWebTests {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private JwtEncoder jwtEncoder;
-    @org.springframework.boot.test.mock.mockito.MockBean private PmsApplicationService application;
-    @org.springframework.boot.test.mock.mockito.MockBean private PmsAuthenticationService authentication;
+    @MockitoBean private PmsApplicationService application;
+    @MockitoBean private PmsAuthenticationService authentication;
 
     @Test
     void loginIsPublicAndDelegatesToTenantAuthentication() throws Exception {
@@ -84,6 +90,21 @@ class PmsSecurityWebTests {
                         .content("""
                                 {"username":"staff@example.invalid","password":"strong-password","role":"ADMIN"}
                                 """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void receptionCanUseClientAndInvoiceRoutesButCannotReadClinicalRecords() throws Exception {
+        when(application.tenant("sw")).thenReturn("SW");
+        when(application.clients("SW", null)).thenReturn(List.of());
+        when(application.invoices("SW", null)).thenReturn(List.of());
+        String reception = bearer("SW", "RECEPTION");
+
+        mockMvc.perform(get("/api/v1/sw/clients").header("Authorization", reception))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/sw/invoices").header("Authorization", reception))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/sw/patients").header("Authorization", reception))
                 .andExpect(status().isForbidden());
     }
 
