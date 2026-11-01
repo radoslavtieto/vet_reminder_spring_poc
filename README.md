@@ -1,6 +1,6 @@
 # VetSync POC: Clinic PMS → Sync Service → Action Engine
 
-A proof of concept for a **near-real-time synchronization pipeline** between a veterinary Practice Management System (PMS) and a downstream Action Engine, built with **Java + Spring Boot**, developed **test-first (TDD)**, hosted on **Azure**, and runnable locally on **Windows 11** and **Ubuntu**.
+A proof of concept for a **near-real-time synchronization pipeline** between a veterinary Practice Management System (PMS) and a downstream Action Engine, built with **Java + Spring Boot**, developed **test-first (TDD)**, designed for Azure, and runnable locally on **Windows 11** and **Ubuntu**. Azure deployment is not implemented.
 
 > **How to use this file:** this is the source of truth for humans and coding agents. Read sections 1–3 first, then work through the roadmap (section 12) one phase at a time. Section 14 lists open decisions and things that must be verified rather than assumed.
 
@@ -28,25 +28,40 @@ A proof of concept for a **near-real-time synchronization pipeline** between a v
 flowchart LR
   subgraph PMS["1. Source System: Core PMS"]
     API["pms-api<br/>Spring Boot REST"]
-    MYSQL[("MySQL<br/>6 regional tenants<br/>+ audit tables")]
-    API --> MYSQL
+    MYSQL[("MySQL<br/>shared schema + tenant_id")]
+    AUDIT[("Trigger-written audit streams")]
+    API -->|tenant-scoped writes| MYSQL
+    MYSQL -->|triggers| AUDIT
   end
 
   subgraph SYNC["2. Middle Sync Service"]
-    WORKER["sync-service<br/>Spring Boot<br/>master-data poller + publisher"]
-    NOSQL[("MongoDB<br/>tenant stream pointers")]
-    WORKER --> NOSQL
+    POLL["sync-service<br/>scheduled master-data poller"]
+    CONVERT["Build v1 SyncEnvelope"]
+    POINTER[("MongoDB<br/>tenant/stream pointers")]
+    POLL --> CONVERT
+    POINTER -->|load cursor| POLL
+    POLL -->|advance after publish confirm| POINTER
+  end
+
+  subgraph BROKER["Local RabbitMQ"]
+    EXCHANGE["vetsync.sync exchange"]
+    QUEUE["vetsync.action-engine queue"]
+    DLQ["vetsync.action-engine.dlq"]
+    EXCHANGE --> QUEUE
+    QUEUE -. "rejected after retries" .-> DLQ
   end
 
   subgraph ACTION["3. Action Engine & Dispatcher"]
-    ENGINE["action-engine<br/>Spring Boot"]
-    PG[("PostgreSQL<br/>own domain model")]
-    ENGINE --> PG
+    LISTENER["action-engine<br/>RabbitMQ listener"]
+    MAP["Map supported master data<br/>Clinic → Site<br/>Client → Contact<br/>Patient → CareSubject"]
+    PG[("PostgreSQL<br/>mapped domain + processed_event inbox")]
+    LISTENER --> MAP -->|one transaction| PG
   end
 
-  MYSQL -- "poll audit_master_data<br/>(read-only)" --> WORKER
-  WORKER -- "v1 SyncEnvelope<br/>(RabbitMQ locally;<br/>Service Bus adapter pending)" --> ENGINE
-  ENGINE -. "future rules and dispatch" .-> OUT(["Owners / staff"])
+  AUDIT -->|"read-only JDBC; safety lag + overlap"| POLL
+  CONVERT -->|"JSON v1; publisher confirm"| EXCHANGE
+  QUEUE --> LISTENER
+  ACTION -. "future rules and dispatch" .-> OUT(["Owners / staff"])
 ```
 
 | # | App | Role | Data store |
@@ -144,18 +159,13 @@ Each workflow builds and tests only its service module (including required Maven
 
 ## 5. Environments and configuration
 
-| Env | Where it runs | Databases | Messaging | Purpose |
-|-----|---------------|-----------|-----------|---------|
-| `local` | Docker Compose on Windows 11 / Ubuntu | Containers | Emulator / RabbitMQ | Development, TDD |
-| `uat` | Azure (own resource group) | Managed services, small SKUs, synthetic data | Service Bus | Integration and acceptance |
-| `prod` | Azure (own resource group) | Managed services, HA SKUs | Service Bus | Live |
+| Environment | Current state | Runtime and data stores |
+|-------------|---------------|-------------------------|
+| `local` | Implemented for development | Three independent Compose files provide MySQL, MongoDB, RabbitMQ, PostgreSQL, and Mailpit; run the Spring Boot apps from Maven. There is no aggregate stack. |
+| `uat` | Deployment target/scaffold only | Terraform and opt-in workflow pieces exist, but full service deployment and the production messaging adapter are not implemented. |
+| `prod` | Not implemented | No production deployment or provisioned production data stores are implied. |
 
-Rules:
-- One Spring profile per environment: `application-local.yml`, `application-uat.yml`, `application-prod.yml`. Shared defaults in `application.yml`.
-- **Every environment-specific value comes from environment variables** (`${MYSQL_URL}`, etc.). No hardcoded hostnames.
-- In Azure, secrets are Key Vault references and services authenticate with managed identity where the service supports it.
-- Local secrets live in `.env` (git-ignored). Commit `.env.example` only.
-- Tests use the `test` profile plus Testcontainers. They must not depend on `local` Docker Compose being up.
+Configuration currently comes from environment variables referenced by each service's `application.properties`; there are no `application-local.yml`, `application-uat.yml`, or `application-prod.yml` files. Set local values in the terminal that launches each app, as shown in section 6. Maven and Spring Boot do not automatically load a `.env` file. Compose credentials in the checked-in files are disposable local-only values and must not be reused outside local development. Tests use test configuration and Testcontainers; they must not depend on the local Compose services being up.
 
 ---
 
@@ -165,9 +175,11 @@ Rules:
 - JDK 21 and Maven 3.9.x (the repository does not yet include Maven Wrapper)
 - Docker with Docker Compose: Docker Desktop with WSL2 on Windows 11, or Docker Engine on Ubuntu
 
+Run all Docker Compose and Maven commands from the repository root. Start the Docker daemon before starting a Compose dependency. The PowerShell examples below are for Windows; the Bash examples are for Ubuntu.
+
 ### Run the PMS API locally
 
-The PMS API has its own MySQL Compose file; the all-services Compose stack described in older project notes is not present. Run these commands from the repository root.
+The PMS API has its own MySQL Compose file; there is no aggregate Compose file. Run these commands from the repository root.
 
 1. Start the local MySQL database:
 
@@ -216,6 +228,14 @@ The PMS API has its own MySQL Compose file; the all-services Compose stack descr
 
    The service listens on `http://localhost:8081`. The first startup applies Flyway migrations; wait for Spring Boot to report that the service has started.
 
+   Optionally, after migrations complete, load the synthetic sample records into a database with no business or audit rows:
+
+   ```text
+   docker compose -f infra/pms-api/docker-compose.yml --profile seed run --rm local-seed
+   ```
+
+   The seed task skips a database that already contains business or audit rows. It is not required to start or authenticate to the API.
+
 4. Open **Swagger UI** at [`http://localhost:8081/swagger-ui/index.html`](http://localhost:8081/swagger-ui/index.html). The OpenAPI document is at [`http://localhost:8081/v3/api-docs`](http://localhost:8081/v3/api-docs).
 
 5. In Swagger UI, use `POST /api/v1/{region}/auth/login` first. Enter `sw` for `{region}` and the bootstrap username/password, then select **Try it out** and **Execute**. Copy `accessToken` from the response, select **Authorize**, and paste the token value (without adding `Bearer`). Swagger will send it as a bearer token for the protected operations.
@@ -227,7 +247,7 @@ The PMS API has its own MySQL Compose file; the all-services Compose stack descr
 
    Each region is a separate tenant. Use `se`, `sc`, `ne`, `nw`, or `nc` only after bootstrapping a user for that tenant. The API requires authentication for business operations and enforces role permissions; Swagger documents the bearer-token requirement. Use synthetic data only.
 
-Stop the API with Ctrl+C. Stop MySQL when finished:
+For a PMS-only session, stop the API with Ctrl+C and stop MySQL:
 
 ```text
 docker compose -f infra/pms-api/docker-compose.yml down
@@ -242,7 +262,7 @@ Add `-v` only if you intend to delete the local database volume and all data in 
 | MySQL 8.4 (`infra/pms-api/docker-compose.yml`) | 3306 | PMS shared schema; created by Flyway |
 | `pms-api` | 8081 | PMS REST API and Swagger UI |
 | PostgreSQL (`infra/action-engine/docker-compose.yml`) | 5432 | Action Engine domain and inbox |
-| MongoDB, RabbitMQ (`infra/sync-service/docker-compose.yml`) | 27017, 5672 | Sync pointers and local event transport |
+| MongoDB, RabbitMQ (`infra/sync-service/docker-compose.yml`) | 27017, 5672 (AMQP), 15672 (management UI) | Sync pointers and local event transport |
 | Mailpit (`infra/action-engine/docker-compose.yml`) | 1025, 8025 | Reserved for the future email dispatcher |
 
 The local broker and databases are separate Compose projects; there is no all-in-one stack. Start them with:
@@ -253,9 +273,13 @@ docker compose -f infra/sync-service/docker-compose.yml up -d
 docker compose -f infra/action-engine/docker-compose.yml up -d
 ```
 
-For the first implemented event path, configure the local connection variables in the same terminal where you run Maven. The values below are local Compose-only examples.
+For the end-to-end event path, keep the PMS API and MySQL running in another terminal. If you stopped them after the PMS-only walkthrough, restart them using the steps above and re-enter the PMS environment variables in that terminal before starting the API.
+
+For the first implemented event path, open separate terminals for the sync service and Action Engine. Set each service's variables in the same terminal where you start that app; environment variables set in one terminal are not inherited by another. The values below are local Compose-only examples.
 
 **Windows PowerShell**
+
+In the sync-service terminal:
 
 ```powershell
 $env:SYNC_MYSQL_URL = 'jdbc:mysql://localhost:3306/vetsync?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC'
@@ -265,17 +289,24 @@ $env:SYNC_MONGODB_URI = 'mongodb://localhost:27017/vetsync'
 $env:SYNC_RABBITMQ_HOST = 'localhost'
 $env:SYNC_RABBITMQ_USERNAME = 'vetsync'
 $env:SYNC_RABBITMQ_PASSWORD = 'local-only'
+$env:SYNC_POLL_ENABLED = 'true'
+```
+
+In the Action Engine terminal:
+
+```powershell
 $env:ACTION_DB_URL = 'jdbc:postgresql://localhost:5432/vetsync'
 $env:ACTION_DB_USERNAME = 'vetsync'
 $env:ACTION_DB_PASSWORD = 'local-only'
 $env:ACTION_RABBITMQ_HOST = 'localhost'
 $env:ACTION_RABBITMQ_USERNAME = 'vetsync'
 $env:ACTION_RABBITMQ_PASSWORD = 'local-only'
-$env:SYNC_POLL_ENABLED = 'true'
 $env:ACTION_MESSAGING_ENABLED = 'true'
 ```
 
 **Ubuntu / Bash**
+
+In the sync-service terminal:
 
 ```bash
 export SYNC_MYSQL_URL='jdbc:mysql://localhost:3306/vetsync?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC'
@@ -285,13 +316,18 @@ export SYNC_MONGODB_URI='mongodb://localhost:27017/vetsync'
 export SYNC_RABBITMQ_HOST='localhost'
 export SYNC_RABBITMQ_USERNAME='vetsync'
 export SYNC_RABBITMQ_PASSWORD='local-only'
+export SYNC_POLL_ENABLED='true'
+```
+
+In the Action Engine terminal:
+
+```bash
 export ACTION_DB_URL='jdbc:postgresql://localhost:5432/vetsync'
 export ACTION_DB_USERNAME='vetsync'
 export ACTION_DB_PASSWORD='local-only'
 export ACTION_RABBITMQ_HOST='localhost'
 export ACTION_RABBITMQ_USERNAME='vetsync'
 export ACTION_RABBITMQ_PASSWORD='local-only'
-export SYNC_POLL_ENABLED='true'
 export ACTION_MESSAGING_ENABLED='true'
 ```
 
@@ -303,7 +339,19 @@ mvn -f services/sync-service/pom.xml spring-boot:run
 mvn -f services/action-engine/pom.xml spring-boot:run
 ```
 
-The sync worker currently polls `audit_master_data`; it publishes only after a RabbitMQ publisher confirmation and advances its MongoDB pointer only after that confirmation. Action Engine acknowledges successful processing after the PostgreSQL inbox and domain changes commit. Processing is retried up to three times by default; failures are then rejected to `vetsync.action-engine.dlq`. Override attempts and initial delay with `ACTION_EVENT_MAX_ATTEMPTS` and `ACTION_EVENT_RETRY_DELAY`. The stream's overlapping lookback intentionally permits at-least-once duplicate delivery.
+The sync worker currently polls `audit_master_data`; it publishes only after a RabbitMQ publisher confirmation and advances its MongoDB pointer only after that confirmation. Action Engine acknowledges successful processing after the PostgreSQL inbox and domain changes commit. Processing is retried up to three times by default; failures are then rejected to `vetsync.action-engine.dlq`. Override attempts and initial delay with `ACTION_EVENT_MAX_ATTEMPTS` and `ACTION_EVENT_RETRY_DELAY`. The stream's overlapping lookback intentionally permits at-least-once duplicate delivery. The RabbitMQ management UI is at `http://localhost:15672` (local Compose credentials: `vetsync` / `local-only`).
+
+The sync datasource pool is configured read-only. Outside the local Compose POC, also grant its MySQL principal `SELECT` only; do not reuse the PMS API's write credentials.
+
+When finished, stop the apps with Ctrl+C, then stop the local dependency containers:
+
+```text
+docker compose -f infra/pms-api/docker-compose.yml down
+docker compose -f infra/sync-service/docker-compose.yml down
+docker compose -f infra/action-engine/docker-compose.yml down
+```
+
+These commands preserve database volumes. Add `-v` only when intentionally deleting local MySQL, MongoDB, and PostgreSQL data.
 
 ### Azure foundation (Terraform)
 
@@ -325,9 +373,7 @@ From `infra/terraform`, run `terraform init` and `terraform plan`; `terraform ap
 
 Six tenants, one per Bulgarian planning region, share **one MySQL schema**. Every PMS business row and audit row carries a `tenant_id` (`SW`, `SE`, `SC`, `NE`, `NW`, or `NC`); tenant-scoped unique keys and composite foreign keys keep tenant-owned records separate. The PMS database adapter, Flyway schema, and region-to-tenant API resolution are implemented in `services/pms-api`; the sync service currently polls only `audit_master_data`.
 
-The PMS datasource is configured with `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD`; these are required at runtime and have no checked-in defaults.
-
-Openable SVG and editable Mermaid diagrams for the PMS schema and current local/Azure infrastructure are in [`services/pms-api/docs/diagrams`](services/pms-api/docs/diagrams/README.md).
+The PMS datasource is configured with `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD`; these are required at runtime and have no checked-in defaults. The editable [architecture flow](planning-documentation/architecture.mmd) and its [SVG rendering](planning-documentation/architecture.svg) document the implemented local master-data path. The current database diagrams are in [database-schema.md](planning-documentation/database-schema.md); Flyway migrations remain the schema source of truth.
 
 | Tenant code | Region |
 |-------------|--------|
@@ -340,34 +386,13 @@ Openable SVG and editable Mermaid diagrams for the PMS schema and current local/
 
 ### 7.2 Shared-schema business tables
 
-Flyway migrations under `services/pms-api/src/main/resources/db/migration` are the schema source of truth; Hibernate schema auto-DDL is disabled. The migration defines the 14 business tables sketched below in the shared schema; each has `tenant_id` and the common business metadata.
+Flyway migrations under `services/pms-api/src/main/resources/db/migration` are the schema source of truth; Hibernate schema auto-DDL is disabled. The migrations define 14 business tables in the shared schema; each has `tenant_id` and the common business metadata. The `pms_user` authentication table and four audit tables are separate from those business tables. See the [database diagrams](planning-documentation/database-schema.md) for all implemented tables and relationships.
 
 Conventions for every business table:
 - `id BIGINT AUTO_INCREMENT` primary key + `public_id CHAR(36)` UUID (unique per tenant). The `public_id` is the cross-system identifier.
 - `created_at`, `updated_at` (`TIMESTAMP(6)`), `version BIGINT` (optimistic locking, also used as the source version in sync events).
 - **Soft delete** (`deleted_at`) so deletions are visible to the sync layer.
 - Money as `DECIMAL(12,2)`, currency `EUR` (Bulgaria joined the euro area on 1 Jan 2026; keep the currency as a column anyway).
-
-```mermaid
-erDiagram
-  CLINIC ||--o{ STAFF : employs
-  CLINIC ||--o{ CLIENT : "registered at"
-  CLIENT ||--o{ PATIENT : owns
-  SPECIES ||--o{ BREED : has
-  PATIENT }o--|| SPECIES : is
-  PATIENT }o--o| BREED : is
-  PATIENT ||--o{ VISIT : has
-  STAFF ||--o{ VISIT : "attends (vet)"
-  VISIT ||--o{ MEDICAL_RECORD_ENTRY : produces
-  PATIENT ||--o{ MEDICAL_RECORD_ENTRY : history
-  VISIT ||--o{ PRESCRIPTION : issues
-  PRESCRIPTION ||--|{ PRESCRIPTION_ITEM : contains
-  MEDICATION ||--o{ PRESCRIPTION_ITEM : "is prescribed"
-  VISIT ||--o{ INVOICE : "billed by"
-  CLIENT ||--o{ INVOICE : "pays"
-  INVOICE ||--|{ INVOICE_LINE : contains
-  INVOICE ||--o{ PAYMENT : "settled by"
-```
 
 **Business tables**
 
@@ -398,7 +423,7 @@ Separate audit tables per stream, so the sync service can poll each independentl
 | `audit_invoice` | invoice, invoice_line, payment | invoices |
 | `audit_master_data` | clinic, client, patient | master-data events |
 
-The four MySQL audit tables and write triggers are implemented by Flyway. Each table adds `tenant_id` to this common shape:
+All four MySQL audit tables and their write triggers are implemented by Flyway, but the sync service currently polls only `audit_master_data`; the other streams are planned. Each table adds `tenant_id` to this common shape:
 
 ```sql
 audit_id      BIGINT AUTO_INCREMENT PRIMARY KEY,   -- "added order"
@@ -413,11 +438,11 @@ payload       JSON         NOT NULL,               -- snapshot of the row after 
 INDEX idx_changed_at (changed_at)
 ```
 
-**How rows get written:** MySQL `AFTER INSERT` and `AFTER UPDATE` triggers capture writes, including writes that bypass the API. A first soft delete (`deleted_at` changing from `NULL` to a timestamp) is emitted as `DELETE`; later updates are emitted as `UPDATE`. The row snapshot includes tenant and business columns, and the triggers use the connection session variable `@pms_changed_by` when set. The PMS API writes business tables through tenant-scoped repositories; the sync poller is future work. Audit tables are not exposed as API write endpoints.
+**How rows get written:** MySQL `AFTER INSERT` and `AFTER UPDATE` triggers capture writes, including writes that bypass the API. A first soft delete (`deleted_at` changing from `NULL` to a timestamp) is emitted as `DELETE`; later updates are emitted as `UPDATE`. The row snapshot includes tenant and business columns, and the triggers use the connection session variable `@pms_changed_by` when set. The PMS API writes business tables through tenant-scoped repositories; the sync service currently polls only `audit_master_data`. Audit tables are not exposed as API write endpoints.
 
 > ⚠️ **Ordering caveat, read this before writing the poller.**
 > `AUTO_INCREMENT` ids are assigned at insert time, not commit time. Transaction A can get `audit_id=100` and commit *after* transaction B got `101` and committed. A poller that reads "everything > 100" right after B commits will **permanently skip row 100**.
-> Mitigation built into this design: the poller only reads rows with `changed_at < now() - safetyLag` (default 5 s), and re-reads a small overlap window each run. Dedupe (section 8.4) makes the overlap harmless. Write a test that reproduces this race before implementing the poller.
+> Mitigation in the implemented master-data poller: it only reads rows with `changed_at < now() - safetyLag` (default 5 s), and re-reads a small overlap window each run. Stable event IDs and the Action Engine inbox make duplicates harmless for the current consumer. Keep a regression test for this race when changing the poller.
 
 > ⚠️ **Not everything is a row change.**
 > "Prescription expired" and "invoice overdue / unpaid for > N days" happen because **time passes**, not because a row is written, so no audit row is produced. The sync service therefore needs two kinds of streams (section 8.2): *change-log streams* and *time-window scans* against the business tables.
@@ -580,7 +605,7 @@ Unit tests currently cover envelope validation/serialization, pointer advancemen
 - **Inbox table** (`processed_event(event_id PK)`) for consumer idempotency. Actions have a natural unique key (e.g. `rule + subjectId + windowStart`) so redelivery cannot create duplicates.
 
 ### 9.5 PostgreSQL (initial tables)
-The initial Flyway migration currently creates `site`, `contact`, `care_subject`, and `processed_event`. Treatment, care-event, receivable, action, and action-attempt tables are not implemented.
+The initial Flyway migration currently creates `site`, `contact`, `care_subject`, and `processed_event`. Treatment, care-event, receivable, action, and action-attempt tables are not implemented. The current PostgreSQL tables are included in the [database diagrams](planning-documentation/database-schema.md); the migration remains the schema source of truth.
 
 ### 9.6 Current implementation status
 
@@ -637,7 +662,7 @@ Each phase should end green (`mvn clean verify`) and merged. Start each task by 
 **Phase 0: Scaffold**
 - Initial parent POM, three Spring Boot service modules, the `sync-contracts` library, hexagonal package boundaries, per-service Dockerfiles and GitHub Actions workflows are in place.
 - Coding-agent guidance, GitHub Copilot agents/prompts/skills, and contribution templates are in place.
-- Remaining: Maven Wrapper, `.gitattributes`, aggregate Compose setup, and ArchUnit skeleton.
+- Remaining: Maven Wrapper, `.gitattributes`, optional aggregate Compose convenience, and ArchUnit skeleton. The three service-local Compose files are already available for local development.
 - *First tests:* each app's context loads (starter tests included); ArchUnit skeleton passes.
 
 **Phase 1: PMS layer 1**

@@ -18,8 +18,8 @@ flowchart LR
 
   subgraph BROKER["Local RabbitMQ"]
     EXCHANGE["vetsync.sync exchange"]
-    QUEUE["action-engine queue"]
-    DLQ["action-engine DLQ"]
+    QUEUE["vetsync.action-engine queue"]
+    DLQ["vetsync.action-engine.dlq"]
     EXCHANGE --> QUEUE
     QUEUE -. "rejected processing" .-> DLQ
   end

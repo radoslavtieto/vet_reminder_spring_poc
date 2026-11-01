@@ -15,7 +15,7 @@ public class RabbitSyncEventListener {
         this.processor = processor;
     }
 
-    @RabbitListener(queues = "${action.messaging.queue:vetsync.action-engine}")
+    @RabbitListener(queues = "vetsync.action-engine")
     public void receive(SyncEnvelope event) {
         processor.process(event);
     }

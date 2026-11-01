@@ -14,27 +14,24 @@ import java.util.concurrent.TimeoutException;
 
 @Component
 public class RabbitSyncEventPublisher implements SyncEventPublisher {
+    private static final String EXCHANGE = "vetsync.sync";
+    private static final String ROUTING_KEY = "master-data";
+
     private final RabbitTemplate rabbitTemplate;
-    private final String exchange;
-    private final String routingKey;
     private final Duration confirmTimeout;
 
     public RabbitSyncEventPublisher(
             RabbitTemplate rabbitTemplate,
-            @Value("${sync.messaging.exchange:vetsync.sync}") String exchange,
-            @Value("${sync.messaging.routing-key:master-data}") String routingKey,
             @Value("${sync.messaging.confirm-timeout:PT10S}") Duration confirmTimeout
     ) {
         this.rabbitTemplate = rabbitTemplate;
-        this.exchange = exchange;
-        this.routingKey = routingKey;
         this.confirmTimeout = confirmTimeout;
     }
 
     @Override
     public void publish(SyncEnvelope event) {
         CorrelationData correlation = new CorrelationData(event.eventId().toString());
-        rabbitTemplate.convertAndSend(exchange, routingKey, event, correlation);
+        rabbitTemplate.convertAndSend(EXCHANGE, ROUTING_KEY, event, correlation);
         try {
             CorrelationData.Confirm confirm = correlation.getFuture().get(confirmTimeout.toMillis(), TimeUnit.MILLISECONDS);
             if (!confirm.isAck()) {

@@ -70,11 +70,13 @@
   <text class="node-title" x="880" y="266">vetsync.sync</text>
   <text class="body" x="880" y="291">Topic exchange</text>
   <rect class="node" x="860" y="385" width="210" height="96"/>
-  <text class="node-title" x="880" y="421">action-engine queue</text>
-  <text class="body" x="880" y="446">master-data binding</text>
+  <text class="node-title" x="880" y="421">Action Engine queue</text>
+  <text class="body" x="880" y="446">vetsync.action-engine</text>
+  <text class="body" x="880" y="466">master-data binding</text>
   <rect class="node" x="860" y="565" width="210" height="90"/>
-  <text class="node-title" x="880" y="600">Action Engine DLQ</text>
-  <text class="body" x="880" y="625">Rejected deliveries</text>
+  <text class="node-title" x="880" y="600">Dead-letter queue</text>
+  <text class="body" x="880" y="620">vetsync.action-engine</text>
+  <text class="body" x="880" y="638">.dlq; rejected deliveries</text>
   <path class="edge" d="M765 418 L855 278"/>
   <text class="label" x="775" y="335">JSON event</text>
   <path class="edge" d="M965 326 L965 380"/>
