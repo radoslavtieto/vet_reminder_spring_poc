@@ -4,9 +4,9 @@
 
 - JDK 21
 - Maven 3.9.x
-- Docker for Testcontainers-based integration tests
+- Docker with Compose for local dependencies and Testcontainers-based integration tests
 
-The Maven Wrapper and local Docker Compose stack have not yet been added. From the repository root, run:
+The Maven Wrapper and an aggregate Compose stack are not present. Separate Compose files provide local MySQL, MongoDB, RabbitMQ, PostgreSQL, and Mailpit dependencies. Follow [README section 6](./README.md#6-running-locally-windows-11-and-ubuntu) to start the services on Windows 11 or Ubuntu. From the repository root, run:
 
 ```sh
 mvn -B clean verify

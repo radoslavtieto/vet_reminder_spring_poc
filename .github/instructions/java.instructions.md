@@ -11,4 +11,4 @@ applyTo: "**/*.java"
 - Use constructor injection and explicit, narrow types. Avoid static service locators and broad exception catches.
 - Inject `Clock` for time-dependent domain behavior; avoid direct system-clock calls in domain code.
 - Add or update focused unit tests for domain/application behavior and adapter/context tests for integration behavior.
-- Keep PMS types out of sync and action-engine code. Do not add a shared contract type until the dedicated contract module exists.
+- Keep PMS types out of sync and action-engine code. Shared event types belong in `libs/sync-contracts`; do not duplicate producer/consumer contracts in the service modules.

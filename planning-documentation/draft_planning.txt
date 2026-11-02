@@ -42,5 +42,11 @@ Spring boot event driven App that will:
     - it has NoSql db to store poller pointers, deduplicate data etc.
     - listen to data input from middle sync layer and convert to its own domain.
     - it has its own Postgres database
+    - it should propagate events toward a central event system 
+    - events should be sent at the same time they are received
 
-I want to start with the initial layer of each of those by creating a good MD file that will structure this data correctly in a .readme file that will be used as a starting point for the Claude code agent.
+3. Action engine - listen to all data coming from middle sync layer
+ - it should listen to events from sync service
+ - it should convert it to its own domain data types - more of a sender data rather than deep pms specific data
+ - it should store data to relevant Postgres database 
+ -
