@@ -6,6 +6,8 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
+        <module name="sync-service" />
+        <module name="sync-contracts" />
         <module name="action-engine" />
         <module name="pms-api" />
       </profile>
@@ -15,6 +17,8 @@
     <option name="ADDITIONAL_OPTIONS_OVERRIDE">
       <module name="action-engine" options="-parameters" />
       <module name="pms-api" options="-parameters" />
+      <module name="sync-contracts" options="-parameters" />
+      <module name="sync-service" options="-parameters" />
     </option>
   </component>
 </project>

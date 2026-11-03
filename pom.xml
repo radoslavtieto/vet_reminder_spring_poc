@@ -27,6 +27,7 @@
     <properties>
         <java.version>21</java.version>
         <jacoco.version>0.8.14</jacoco.version>
+        <jackson-bom.version>2.21.7</jackson-bom.version>
     </properties>
 
     <build>
