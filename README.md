@@ -80,7 +80,7 @@ flowchart LR
 |---------|--------|-------|
 | Language | Java 21 (LTS) | Java 25 is also LTS; stay on 21 unless there is a reason to move. Verify current guidance. |
 | Framework | Spring Boot 3.5.x or newer | **Pin one version in the parent POM; verify the current stable release before starting.** |
-| Build | Maven multi-module | Each GitHub Actions workflow installs Maven 3.9.9; the Maven Wrapper remains a scaffold follow-up. |
+| Build | Maven multi-module | Local builds use the checked-in Maven Wrapper (Maven 3.9.11); GitHub Actions workflows install Maven 3.9.9. |
 | Source DB | MySQL 8.4 LTS | Flyway migrations. |
 | Sync state | MongoDB locally, Azure Cosmos DB for MongoDB API in UAT/PROD | See open decision D3. |
 | Messaging | RabbitMQ locally behind publisher/consumer adapters; Azure Service Bus is the intended Azure transport | Azure adapter and topology remain open under D4. |
@@ -121,7 +121,7 @@ vetsync-poc/
     └── workflows/                ← one CI/CD workflow per service
 ```
 
-Base package: `com.vetsync.<service>` (rename to your organisation's domain). The three Spring Boot applications are separate Maven modules; `libs/sync-contracts` is a non-deployable shared contract module. A service and its required modules can be built with `mvn -pl services/<module> -am verify`.
+Base package: `com.vetsync.<service>` (rename to your organisation's domain). The three Spring Boot applications are separate Maven modules; `libs/sync-contracts` is a non-deployable shared contract module. A service and its required modules can be built with `./mvnw -pl services/<module> -am verify`.
 
 Each service has its own hexagonal boundary and deployable container image:
 
@@ -161,7 +161,7 @@ Each workflow builds and tests only its service module (including required Maven
 
 | Environment | Current state | Runtime and data stores |
 |-------------|---------------|-------------------------|
-| `local` | Implemented for development | Three independent Compose files provide MySQL, MongoDB, RabbitMQ, PostgreSQL, and Mailpit; run the Spring Boot apps from Maven. There is no aggregate stack. |
+| `local` | Implemented for development | Three independent Compose files provide MySQL, MongoDB, RabbitMQ, PostgreSQL, and Mailpit; run the Spring Boot apps with the Maven Wrapper. There is no aggregate stack. |
 | `uat` | Deployment target/scaffold only | Terraform and opt-in workflow pieces exist, but full service deployment and the production messaging adapter are not implemented. |
 | `prod` | Not implemented | No production deployment or provisioned production data stores are implied. |
 
@@ -172,10 +172,10 @@ Configuration currently comes from environment variables referenced by each serv
 ## 6. Running locally (Windows 11 and Ubuntu)
 
 **Prerequisites**
-- JDK 21 and Maven 3.9.x (the repository does not yet include Maven Wrapper)
+- JDK 21; the checked-in Maven Wrapper downloads and uses Maven 3.9.11
 - Docker with Docker Compose: Docker Desktop with WSL2 on Windows 11, or Docker Engine on Ubuntu
 
-Run all Docker Compose and Maven commands from the repository root. Start the Docker daemon before starting a Compose dependency. The PowerShell examples below are for Windows; the Bash examples are for Ubuntu.
+Run all Docker Compose and Maven commands from the repository root. Start the Docker daemon before starting a Compose dependency. Use `./mvnw` in Bash, including Git Bash, or `.\mvnw.cmd` in Windows PowerShell; the wrapper downloads Maven 3.9.11 when needed. The PowerShell examples below are for Windows; the Bash examples are for Ubuntu or Git Bash.
 
 ### Run the PMS API locally
 
@@ -189,7 +189,7 @@ The PMS API has its own MySQL Compose file; there is no aggregate Compose file. 
 
    Compose uses the local-only database `vetsync`, username `vetsync`, and password `local-only`. Flyway creates the tables automatically when the API starts.
 
-2. Set the required runtime configuration in the same terminal where you will run Maven. Generate a fresh Base64-encoded 32-byte JWT signing key; do not commit it or reuse it outside local development.
+2. Set the required runtime configuration in the same terminal where you will run the API. Generate a fresh Base64-encoded 32-byte JWT signing key; do not commit it or reuse it outside local development.
 
    **Windows PowerShell**
 
@@ -222,8 +222,16 @@ The PMS API has its own MySQL Compose file; there is no aggregate Compose file. 
 
 3. Start the API:
 
+   **Bash / Git Bash**
+
+   ```bash
+   ./mvnw -pl services/pms-api spring-boot:run
+   ```
+
+   **Windows PowerShell**
+
    ```text
-   mvn -pl services/pms-api spring-boot:run
+   .\mvnw.cmd -pl services/pms-api spring-boot:run
    ```
 
    The service listens on `http://localhost:8081`. The first startup applies Flyway migrations; wait for Spring Boot to report that the service has started.
@@ -334,10 +342,12 @@ export ACTION_MESSAGING_ENABLED='true'
 Build both services and their shared contract, then run each application in a separate terminal:
 
 ```text
-mvn -pl services/sync-service,services/action-engine -am install
-mvn -f services/sync-service/pom.xml spring-boot:run
-mvn -f services/action-engine/pom.xml spring-boot:run
+./mvnw -pl services/sync-service,services/action-engine -am install
+./mvnw -f services/sync-service/pom.xml spring-boot:run
+./mvnw -f services/action-engine/pom.xml spring-boot:run
 ```
+
+In Windows PowerShell, use `.\mvnw.cmd` in place of `./mvnw`.
 
 The sync worker currently polls `audit_master_data`; it publishes only after a RabbitMQ publisher confirmation and advances its MongoDB pointer only after that confirmation. Action Engine acknowledges successful processing after the PostgreSQL inbox and domain changes commit. Processing is retried up to three times by default; failures are then rejected to `vetsync.action-engine.dlq`. Override attempts and initial delay with `ACTION_EVENT_MAX_ATTEMPTS` and `ACTION_EVENT_RETRY_DELAY`. The stream's overlapping lookback intentionally permits at-least-once duplicate delivery. The RabbitMQ management UI is at `http://localhost:15672` (local Compose credentials: `vetsync` / `local-only`).
 
@@ -657,12 +667,12 @@ Pipeline target (GitHub Actions): `build & test` → `build image` → `push to 
 
 ## 12. Roadmap: start with the initial layer of each app
 
-Each phase should end green (`mvn clean verify`) and merged. Start each task by writing the failing test named in *First tests*.
+Each phase should end green (`./mvnw clean verify`) and merged. In Windows PowerShell, use `.\mvnw.cmd clean verify`. Start each task by writing the failing test named in *First tests*.
 
 **Phase 0: Scaffold**
 - Initial parent POM, three Spring Boot service modules, the `sync-contracts` library, hexagonal package boundaries, per-service Dockerfiles and GitHub Actions workflows are in place.
 - Coding-agent guidance, GitHub Copilot agents/prompts/skills, and contribution templates are in place.
-- Remaining: Maven Wrapper, `.gitattributes`, optional aggregate Compose convenience, and ArchUnit skeleton. The three service-local Compose files are already available for local development.
+- Remaining: `.gitattributes`, optional aggregate Compose convenience, and ArchUnit skeleton. The three service-local Compose files are already available for local development.
 - *First tests:* each app's context loads (starter tests included); ArchUnit skeleton passes.
 
 **Phase 1: PMS layer 1**
@@ -696,7 +706,7 @@ Each phase should end green (`mvn clean verify`) and merged. Start each task by 
 # Rules for the agent
 - Follow TDD strictly: write a failing test, show it failing, implement the minimum, run tests, refactor.
 - Work on ONE roadmap phase task at a time (README section 12). Ask before starting a new phase.
-- Build/test with Maven 3.9.9 until the Maven Wrapper is added: `mvn clean verify`.
+- Build/test with the Maven Wrapper: `./mvnw clean verify` (or `.\mvnw.cmd clean verify` in Windows PowerShell).
 - Everything must work on Windows 11 AND Ubuntu: no OS-specific paths or shell-only scripts.
 - Respect module boundaries: action-engine must not import PMS classes; sync-service accesses MySQL read-only;
   once introduced, shared types live only in libs/sync-contracts.
