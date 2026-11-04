@@ -9,7 +9,7 @@
 ## Verification
 
 - [ ] Focused tests added or updated
-- [ ] `mvn -B -pl <service-module> -am verify` (or explain why not run)
+- [ ] `./mvnw -B -pl <service-module> -am verify` (or explain why not run; use `.\mvnw.cmd` in Windows PowerShell)
 - [ ] Documentation updated where needed
 - [ ] No secrets, real personal/clinical data, or generated build artifacts added
 

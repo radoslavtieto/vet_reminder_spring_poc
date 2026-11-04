@@ -26,16 +26,16 @@ The root `pom.xml` is the Maven reactor and includes the non-deployable `libs/sy
 
 ## Build and test
 
-Use Maven 3.9.x and JDK 21. The Maven Wrapper has not yet been added.
+Use JDK 21 and the checked-in Maven Wrapper, which downloads Maven 3.9.11. In Bash (including Git Bash), run:
 
 ```sh
-mvn -B -pl services/pms-api -am verify
-mvn -B -pl services/sync-service -am verify
-mvn -B -pl services/action-engine -am verify
-mvn -B clean verify
+./mvnw -B -pl services/pms-api -am verify
+./mvnw -B -pl services/sync-service -am verify
+./mvnw -B -pl services/action-engine -am verify
+./mvnw -B clean verify
 ```
 
-Use the narrowest verification command that covers the change. Integration tests using Testcontainers require a running Docker daemon. Do not report a test as passing if it was skipped or could not run.
+In Windows PowerShell, use `.\mvnw.cmd` in place of `./mvnw`. GitHub Actions workflows install Maven 3.9.9. Use the narrowest verification command that covers the change. Testcontainers integration tests require a running Docker daemon; they do not depend on the local Compose services being up. Do not report a test as passing if it was skipped or could not run.
 
 ## Before handing off
 
