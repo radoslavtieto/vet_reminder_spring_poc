@@ -187,7 +187,7 @@ The PMS API has its own MySQL Compose file; there is no aggregate Compose file. 
    docker compose -f infra/pms-api/docker-compose.yml up -d mysql
    ```
 
-   Compose uses the local-only database `vetsync`, username `vetsync`, and password `local-only`. Flyway creates the tables automatically when the API starts.
+   Compose uses the local-only database `vetsync`, username `vetsync`, and password `local-only`. The local MySQL server enables `log_bin_trust_function_creators` so the application user can create the audit triggers in the Flyway migration. Flyway creates the tables automatically when the API starts.
 
 2. Set the required runtime configuration in the same terminal where you will run the API. Generate a fresh Base64-encoded 32-byte JWT signing key; do not commit it or reuse it outside local development.
 
