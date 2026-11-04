@@ -41,7 +41,8 @@ jobs:
         with:
           maven-version: 3.9.9
       - name: Verify PMS API and its Maven dependencies
-        run: mvn -B -pl services/pms-api -am verify
+        # Testcontainers defaults to Docker API 1.32; the hosted daemon requires at least 1.40.
+        run: mvn -B -Dapi.version=1.40 -pl services/pms-api -am verify
 
   deploy-uat:
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_uat }}
