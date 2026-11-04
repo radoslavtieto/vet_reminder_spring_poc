@@ -189,6 +189,8 @@ The PMS API has its own MySQL Compose file; there is no aggregate Compose file. 
 
    Compose uses the local-only database `vetsync`, username `vetsync`, and password `local-only`. The local MySQL server enables `log_bin_trust_function_creators` so the application user can create the audit triggers in the Flyway migration. Flyway creates the tables automatically when the API starts.
 
+  To browse the database in MySQL Workbench, create a **Standard (TCP/IP)** connection with hostname `localhost`, port `3306`, username `vetsync`, and password `local-only`; set the default schema to `vetsync`. Connect after starting MySQL. These credentials are for local development only.
+
 2. Set the required runtime configuration in the same terminal where you will run the API. Generate a fresh Base64-encoded 32-byte JWT signing key; do not commit it or reuse it outside local development.
 
    **Windows PowerShell**
