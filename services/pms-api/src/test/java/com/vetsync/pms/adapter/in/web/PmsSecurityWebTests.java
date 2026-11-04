@@ -35,8 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(controllers = {AuthController.class, ClientController.class,
-        InvoiceController.class, PatientController.class},
-        properties = "pms.security.jwt-secret=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
+        InvoiceController.class, PatientController.class})
 @AutoConfigureMockMvc
 @Import(PmsSecurityConfiguration.class)
 class PmsSecurityWebTests {
