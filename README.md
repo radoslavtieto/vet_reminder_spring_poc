@@ -175,7 +175,7 @@ Configuration currently comes from environment variables referenced by each serv
 - JDK 21; the checked-in Maven Wrapper downloads and uses Maven 3.9.11
 - Docker with Docker Compose: Docker Desktop with WSL2 on Windows 11, or Docker Engine on Ubuntu
 
-Run all Docker Compose and Maven commands from the repository root. Start the Docker daemon before starting a Compose dependency. Use `./mvnw` in Bash, including Git Bash, or `.\mvnw.cmd` in Windows PowerShell; the wrapper downloads Maven 3.9.11 when needed. The PowerShell examples below are for Windows; the Bash examples are for Ubuntu or Git Bash.
+Run all Docker Compose and Maven commands from the repository root. Start the Docker daemon before starting a Compose dependency. Use `./mvnw` in Bash, including Git Bash, or `.\mvnw.cmd` in Windows PowerShell; the wrapper downloads Maven 3.9.11 when needed. The PowerShell examples below are for Windows; the Bash examples are for Ubuntu or Git Bash. VS Code Test Explorer uses the workspace test configuration to pass Docker API version 1.44, which is required by Docker Engine 29.
 
 ### Run the PMS API locally
 
