@@ -65,7 +65,7 @@ class PmsDatabaseIntegrationTests {
                 "clinic", "staff", "client", "species", "breed", "patient", "visit",
                 "medical_record_entry", "medication", "prescription", "prescription_item",
                 "invoice", "invoice_line", "payment", "audit_master_data", "audit_visit",
-                "audit_prescription", "audit_invoice", "flyway_schema_history");
+                "audit_prescription", "audit_invoice", "pms_user", "flyway_schema_history");
     }
 
     @Test
