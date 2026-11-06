@@ -177,6 +177,31 @@ Configuration currently comes from environment variables referenced by each serv
 
 Run all Docker Compose and Maven commands from the repository root. Start the Docker daemon before starting a Compose dependency. Use `./mvnw` in Bash, including Git Bash, or `.\mvnw.cmd` in Windows PowerShell; the wrapper downloads Maven 3.9.11 when needed. The PowerShell examples below are for Windows; the Bash examples are for Ubuntu or Git Bash. VS Code Test Explorer uses the workspace test configuration to pass Docker API version 1.44, which is required by Docker Engine 29.
 
+### Run the PMS API tests
+
+From the repository root, run the PMS API tests and build any required Maven modules with:
+
+**Bash / Git Bash**
+
+```bash
+./mvnw -B -Dapi.version=1.44 -pl services/pms-api -am test
+```
+
+**Windows PowerShell**
+
+```powershell
+.\mvnw.cmd -B -Dapi.version=1.44 -pl services/pms-api -am test
+```
+
+The `-Dapi.version=1.44` option selects the Docker API version required by Docker Engine 29, matching the workspace test configuration. The `-am` option also builds the modules required by `pms-api`. Tests that use Testcontainers require Docker to be running; you do not need to start the local Compose services separately.
+
+### Run tests from an IDE
+
+Testcontainers-based tests need a running Docker daemon in either IDE.
+
+- **Visual Studio Code:** Open the Java Testing view (the beaker icon) and run a test, test class, or all tests. The workspace configuration in `.vscode/settings.json` already sets `-Dapi.version=1.44` for Java tests.
+- **IntelliJ IDEA:** Open **Run > Edit Configurations**, select the JUnit run configuration (or the JUnit template for future configurations), and add `-Dapi.version=1.44` to **VM options**. Run the desired test, class, or package from the gutter or the Run window. The Maven command-line property does not automatically apply to IDE-launched tests.
+
 ### Run the PMS API locally
 
 The PMS API has its own MySQL Compose file; there is no aggregate Compose file. Run these commands from the repository root.
