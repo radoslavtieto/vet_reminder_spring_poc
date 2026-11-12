@@ -1,0 +1,43 @@
+flowchart TD
+    subgraph Web["Presentation and Security"]
+        Client["HTTP client"]
+        Security["JWT and tenant security"]
+        SecurityConfig["Security configuration"]
+        Controllers["Resource controllers"]
+        DTOs["Validated DTOs"]
+        Advice["Exception advice"]
+    end
+    subgraph Application["Application"]
+        PmsService["PmsApplicationService"]
+        AuthService["PmsAuthenticationService"]
+        Bootstrap["PmsAdminBootstrap"]
+        Clock["Clock configuration"]
+    end
+    subgraph Persistence["Persistence Adapter"]
+        Repositories["Spring Data repositories"]
+        Entities["JPA entities"]
+        Flyway["Flyway migrations"]
+    end
+    subgraph Data["MySQL and External Reader"]
+        Business[("Business tables")]
+        Audit[("Audit stream tables")]
+        Sync["sync-service"]
+    end
+
+    Client -->|"sends requests"| Security
+    Security -->|"authorizes"| Controllers
+    Controllers -->|"binds input"| DTOs
+    Controllers -->|"calls use cases"| PmsService
+    Controllers -->|"calls authentication"| AuthService
+    PmsService -->|"reads and writes"| Repositories
+    AuthService -->|"reads and writes users"| Repositories
+    Bootstrap -->|"creates configured admins"| Repositories
+    Repositories -->|"loads and stores"| Entities
+    Repositories -->|"queries and updates"| Business
+    Flyway -->|"creates schema and triggers"| Business
+    Business -->|"triggers audit records"| Audit
+    Sync -->|"reads audit records"| Audit
+    SecurityConfig -.->|"configures"| Security
+    Clock -.->|"supplies time"| PmsService
+    Clock -.->|"supplies time"| AuthService
+    Advice -.->|"maps exceptions"| Controllers

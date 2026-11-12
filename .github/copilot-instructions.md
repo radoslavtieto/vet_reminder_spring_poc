@@ -9,6 +9,7 @@ Read and follow the repository-wide rules in [`AGENTS.md`](../AGENTS.md). These 
 - Prefer a narrow, test-backed change over broad scaffolding. Do not create speculative APIs, schemas, event contracts, or Azure infrastructure.
 - Ask before resolving a significant open architecture or business decision from README section 14.
 - Keep changes platform-neutral for Windows 11 and Ubuntu. Do not require shell-specific scripts for the primary build and test path.
+- Follow `SECURITY.md` and apply secure-by-default practices: validate and sanitize untrusted input, keep authorization and ownership checks server-side, avoid logging secrets or sensitive data, and prefer least-privilege permissions and fail-safe defaults.
 - Never include real personal/clinical data or secrets. Never run deployment, infrastructure provisioning, or other externally mutating Azure commands without explicit user approval.
 
 ## Pull requests and handoffs
