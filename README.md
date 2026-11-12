@@ -190,10 +190,12 @@ From the repository root, run the PMS API tests and build any required Maven mod
 **Windows PowerShell**
 
 ```powershell
-.\mvnw.cmd -B -Dapi.version=1.44 -pl services/pms-api -am test
+.\mvnw.cmd -B '-Dapi.version=1.44' -pl services/pms-api -am test
 ```
 
 The `-Dapi.version=1.44` option selects the Docker API version required by Docker Engine 29, matching the workspace test configuration. The `-am` option also builds the modules required by `pms-api`. Tests that use Testcontainers require Docker to be running; you do not need to start the local Compose services separately.
+
+See the [PMS API test guide](services/pms-api/docs/testing.md) for VS Code test discovery, JaCoCo reports, the current coverage inventory, and recommended follow-up tests.
 
 ### Run tests from an IDE
 
