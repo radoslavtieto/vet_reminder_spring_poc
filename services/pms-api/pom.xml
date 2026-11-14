@@ -87,7 +87,7 @@
                                 <rule>
                                     <element>CLASS</element>
                                     <includes>
-                                        <include>com.vetsync.pms.application.PmsApplicationService</include>
+                                        <include>com.vetsync.pms.application.Pms*ApplicationService</include>
                                     </includes>
                                     <limits>
                                         <limit>
