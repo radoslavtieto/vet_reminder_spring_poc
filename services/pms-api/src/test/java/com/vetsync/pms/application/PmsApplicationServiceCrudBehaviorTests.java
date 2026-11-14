@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -94,9 +95,15 @@ class PmsApplicationServiceCrudBehaviorTests {
 
     @BeforeEach
     void setUp() {
-        service = new PmsApplicationService(clinics, staff, clients, patients, visits, prescriptions,
-                invoices, medications, payments, history, prescriptionItems, species, breeds,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+        service = new PmsApplicationService(
+                new PmsCatalogApplicationService(species, breeds, medications),
+                new PmsPracticeApplicationService(clinics, staff, clients, clock),
+                new PmsPatientCareApplicationService(clinics, staff, clients, patients, visits,
+                        history, species, breeds, clock),
+                new PmsPrescriptionApplicationService(prescriptions, prescriptionItems, medications,
+                        patients, visits, staff, clock),
+                new PmsBillingApplicationService(invoices, payments, clinics, clients, visits, clock));
         clinic = entity(new ClinicEntity("SW", "Synthetic Clinic", "Sample City",
                 null, null, null, true), 1L);
         client = entity(new ClientEntity("SW", clinic, "Synthetic", "Owner",
@@ -199,6 +206,19 @@ class PmsApplicationServiceCrudBehaviorTests {
     }
 
     @Test
+    void givenStaffCreationWithoutAClinicOrWithAConflictingClinicThenItIsRejected() {
+        assertThatThrownBy(() -> service.createStaff("SW",
+                new StaffRequest(null, "vet", "Synthetic Vet", "LIC-2", true)))
+                .isInstanceOf(PmsInvalidRequestException.class)
+                .hasMessage("clinicId is required");
+
+        assertThatThrownBy(() -> service.createStaff("SW", 1L,
+                new StaffRequest(2L, "vet", "Synthetic Vet", "LIC-2", true)))
+                .isInstanceOf(PmsInvalidRequestException.class)
+                .hasMessage("Clinic does not match path");
+    }
+
+    @Test
     void givenAClientWhenSearchedUpdatedAndDeletedThenSearchIsCaseInsensitiveAndTenantScoped() {
         when(clients.findAllByTenantId("SW")).thenReturn(List.of(client));
         when(clients.save(any())).thenAnswer(call -> entity(call.getArgument(0), 12L));
@@ -241,6 +261,7 @@ class PmsApplicationServiceCrudBehaviorTests {
         var byBlankMicrochip = service.patients("SW", " ");
         var forClient = service.patientsForClient("SW", 2L);
         var created = service.createPatientForClient("SW", 2L, request);
+        var createdWithoutPath = service.createPatient("SW", request);
         var found = service.patient("SW", 5L);
         var updated = service.updatePatient("SW", 5L, request);
         service.deletePatient("SW", 5L);
@@ -250,6 +271,7 @@ class PmsApplicationServiceCrudBehaviorTests {
         assertThat(byBlankMicrochip).hasSize(1);
         assertThat(forClient).hasSize(1);
         assertThat(created.breedId()).isEqualTo(13L);
+        assertThat(createdWithoutPath.name()).isEqualTo("Updated Patient");
         assertThat(found.microchipNo()).isEqualTo("CHIP-1");
         assertThat(updated.name()).isEqualTo("Updated Patient");
         assertThat(patient.getDeletedAt()).isEqualTo(NOW);
@@ -286,6 +308,27 @@ class PmsApplicationServiceCrudBehaviorTests {
 
         verify(patients, never()).saveAndFlush(patient);
         assertThat(patient.getClinic().getId()).isEqualTo(1L);
+    }
+
+    @Test
+    void givenAnInactivePatientOrDestinationClinicWhenTransferredThenTheTransferIsRejected() {
+        PatientEntity deceased = entity(new PatientEntity("SW", client, clinic, "Deceased Patient",
+                speciesEntity, null, PatientEntity.Sex.FEMALE, LocalDate.parse("2020-01-01"),
+                null, false, new BigDecimal("12.50"), PatientEntity.PatientStatus.DECEASED, null), 25L);
+        ClinicEntity inactiveClinic = entity(new ClinicEntity("SW", "Inactive Clinic", "Sample City",
+                null, null, null, false), 26L);
+        when(patients.findByTenantIdAndId("SW", 25L)).thenReturn(Optional.of(deceased));
+        when(patients.findByTenantIdAndId("SW", 5L)).thenReturn(Optional.of(patient));
+        when(clinics.findByTenantIdAndId("SW", 26L)).thenReturn(Optional.of(inactiveClinic));
+
+        assertThatThrownBy(() -> service.transferPatientToClinic("SW", 25L, 1L))
+                .isInstanceOf(PmsInvalidRequestException.class)
+                .hasMessage("Only active patients can be transferred");
+        assertThatThrownBy(() -> service.transferPatientToClinic("SW", 5L, 26L))
+                .isInstanceOf(PmsInvalidRequestException.class)
+                .hasMessage("Patients can only be transferred to an active clinic");
+
+        verify(patients, never()).saveAndFlush(any());
     }
 
     @Test
@@ -328,6 +371,29 @@ class PmsApplicationServiceCrudBehaviorTests {
     }
 
     @Test
+    void givenAVisitWhenUpdatedWithoutStatusThenItsStatusIsPreserved() {
+        when(visits.saveAndFlush(visit)).thenReturn(visit);
+        VisitRequest request = new VisitRequest(5L, 1L, 4L, "CHECKUP", null,
+                NOW, null, null, "Annual checkup", null, null);
+
+        var updated = service.updateVisit("SW", 6L, request);
+
+        assertThat(updated.status()).isEqualTo("SCHEDULED");
+        verify(visits).saveAndFlush(visit);
+    }
+
+    @Test
+    void givenAnInProgressVisitWhenCancelledThenASecondTransitionIsRejected() {
+        when(visits.saveAndFlush(visit)).thenReturn(visit);
+
+        assertThat(service.transitionVisit("SW", 6L, "IN_PROGRESS").status()).isEqualTo("IN_PROGRESS");
+        assertThat(service.transitionVisit("SW", 6L, "CANCELLED").status()).isEqualTo("CANCELLED");
+        assertThatThrownBy(() -> service.transitionVisit("SW", 6L, "COMPLETED"))
+                .isInstanceOf(PmsInvalidRequestException.class)
+                .hasMessage("Visit cannot transition from CANCELLED to COMPLETED");
+    }
+
+    @Test
     void givenAScheduledVisitWhenCompletedDirectlyThenTransitionIsRejected() {
         when(visits.findByTenantIdAndId("SW", 6L)).thenReturn(Optional.of(visit));
 
@@ -338,6 +404,21 @@ class PmsApplicationServiceCrudBehaviorTests {
 
         verify(visits, never()).saveAndFlush(visit);
         assertThat(visit.getStatus()).isEqualTo(VisitEntity.VisitStatus.SCHEDULED);
+    }
+
+    @Test
+    void givenAVisitWithAMismatchedClinicWhenCreatedThenItIsRejected() {
+        ClinicEntity otherClinic = entity(new ClinicEntity("SW", "Other Clinic", "Sample City",
+                null, null, null, true), 25L);
+        when(clinics.findByTenantIdAndId("SW", 25L)).thenReturn(Optional.of(otherClinic));
+        VisitRequest request = new VisitRequest(5L, 25L, 4L, "CHECKUP", "SCHEDULED",
+                NOW, null, null, "Annual checkup", null, null);
+
+        assertThatThrownBy(() -> service.createVisit("SW", request))
+                .isInstanceOf(PmsResourceNotFoundException.class)
+                .hasMessage("Patient, clinic and vet must belong to the same clinic");
+
+        verify(visits, never()).save(any());
     }
 
     @Test
@@ -420,6 +501,54 @@ class PmsApplicationServiceCrudBehaviorTests {
     }
 
     @Test
+    void givenAControlledMedicationAndLicensedVetWhenAddedThenTheItemIsSaved() {
+        MedicationEntity medication = entity(new MedicationEntity("SW", "CONTROLLED-002",
+                "Synthetic controlled medicine", "tablet", "5 mg", true), 22L);
+        when(prescriptions.findByTenantIdAndId("SW", 7L)).thenReturn(Optional.of(prescription));
+        when(medications.findByTenantIdAndId("SW", 22L)).thenReturn(Optional.of(medication));
+        when(prescriptionItems.save(any())).thenAnswer(call -> {
+            PrescriptionItemEntity item = call.getArgument(0);
+            return entity(item, 26L);
+        });
+
+        var added = service.addPrescriptionItem("SW", 7L,
+                new com.vetsync.pms.adapter.in.web.dto.PrescriptionItemDto
+                        .PrescriptionItemRequest(22L, "1 tablet", "once daily", 7,
+                        new BigDecimal("7.000"), 0));
+
+        assertThat(added.medicationCode()).isEqualTo("CONTROLLED-002");
+        verify(prescriptionItems).save(any());
+    }
+
+    @Test
+    void givenAPrescriptionWithAnInvalidDateRangeWhenUpdatedThenItIsRejected() {
+        when(prescriptions.findByTenantIdAndId("SW", 7L)).thenReturn(Optional.of(prescription));
+        PrescriptionRequest request = new PrescriptionRequest(5L, 6L, 4L, "ACTIVE",
+                LocalDate.parse("2026-10-02"), LocalDate.parse("2026-10-01"), "Synthetic");
+
+        assertThatThrownBy(() -> service.updatePrescription("SW", 7L, request))
+                .isInstanceOf(PmsInvalidRequestException.class)
+                .hasMessage("validUntil must not precede issuedOn");
+
+        verify(prescriptions, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void givenAPrescriptionWithAVetDifferentFromItsVisitWhenCreatedThenItIsRejected() {
+        StaffEntity nurse = entity(new StaffEntity("SW", clinic, StaffEntity.StaffRole.NURSE,
+                "Synthetic Nurse", null, true), 23L);
+        when(staff.findByTenantIdAndId("SW", 23L)).thenReturn(Optional.of(nurse));
+        PrescriptionRequest request = new PrescriptionRequest(5L, 6L, 23L, "ACTIVE",
+                LocalDate.parse("2026-09-30"), LocalDate.parse("2026-10-14"), "Synthetic");
+
+        assertThatThrownBy(() -> service.createPrescription("SW", request))
+                .isInstanceOf(PmsResourceNotFoundException.class)
+                .hasMessage("Prescription patient and vet must match its visit");
+
+        verify(prescriptions, never()).save(any());
+    }
+
+    @Test
     void givenAnInvoiceWhenListedUpdatedAndItsPaymentsReadThenRelatedDataIsMapped() {
         when(invoices.findAllByTenantId("SW")).thenReturn(List.of(invoice));
         when(invoices.save(any())).thenAnswer(call -> call.getArgument(0));
@@ -447,6 +576,23 @@ class PmsApplicationServiceCrudBehaviorTests {
     }
 
     @Test
+    void givenAVisitFromAnotherClinicWhenAnInvoiceIsCreatedThenItIsRejected() {
+        ClinicEntity otherClinic = entity(new ClinicEntity("SW", "Other Clinic", "Sample City",
+                null, null, null, true), 25L);
+        when(clinics.findByTenantIdAndId("SW", 25L)).thenReturn(Optional.of(otherClinic));
+        when(visits.findByTenantIdAndId("SW", 6L)).thenReturn(Optional.of(visit));
+        InvoiceRequest request = new InvoiceRequest(25L, 2L, 6L, "INV-2", "DRAFT",
+                LocalDate.parse("2026-09-30"), LocalDate.parse("2026-10-14"), "EUR",
+                new BigDecimal("100.00"), BigDecimal.ZERO);
+
+        assertThatThrownBy(() -> service.createInvoice("SW", request))
+                .isInstanceOf(PmsResourceNotFoundException.class)
+                .hasMessage("Visit must belong to the invoice clinic and client");
+
+        verify(invoices, never()).save(any());
+    }
+
+    @Test
     void givenAPatientWhenHistoryIsAddedAndReadThenVisitOwnershipIsChecked() {
         when(history.findAllByTenantIdAndPatient_IdOrderByRecordedAtDesc("SW", 5L))
                 .thenReturn(List.of(historyEntry));
@@ -461,6 +607,26 @@ class PmsApplicationServiceCrudBehaviorTests {
         assertThat(added.description()).isEqualTo("Synthetic checkup note");
         assertThat(entries).hasSize(1);
         assertThat(found.patientId()).isEqualTo(5L);
+    }
+
+    @Test
+    void givenAVisitOrHistoryEntryOwnedByAnotherPatientWhenAddedOrReadThenItIsRejected() {
+        PatientEntity anotherPatient = entity(new PatientEntity("SW", client, clinic, "Another Patient",
+                speciesEntity, null, PatientEntity.Sex.MALE, LocalDate.parse("2020-01-01"),
+                null, false, new BigDecimal("10.00"), PatientEntity.PatientStatus.ACTIVE, null), 25L);
+        when(patients.findByTenantIdAndId("SW", 25L)).thenReturn(Optional.of(anotherPatient));
+        when(visits.findByTenantIdAndId("SW", 6L)).thenReturn(Optional.of(visit));
+        when(history.findByTenantIdAndId("SW", 10L)).thenReturn(Optional.of(historyEntry));
+
+        assertThatThrownBy(() -> service.addHistory("SW", 25L,
+                new HistoryRequest("NOTE", "Synthetic note", 6L, NOW, "Synthetic Vet")))
+                .isInstanceOf(PmsResourceNotFoundException.class)
+                .hasMessage("Visit does not belong to patient");
+        assertThatThrownBy(() -> service.historyEntry("SW", 25L, 10L))
+                .isInstanceOf(PmsResourceNotFoundException.class)
+                .hasMessage("History entry does not belong to patient");
+
+        verify(history, never()).save(any());
     }
 
     @Test
