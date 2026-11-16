@@ -29,22 +29,22 @@ import static com.vetsync.pms.adapter.in.web.dto.VisitDto.VisitView;
 
 @Service
 public class PmsApplicationService {
-    private final PmsCatalogApplicationService catalog;
-    private final PmsPracticeApplicationService practice;
-    private final PmsPatientCareApplicationService patientCare;
-    private final PmsPrescriptionApplicationService prescription;
-    private final PmsBillingApplicationService billing;
+    private final PmsCatalogApplicationService catalogService;
+    private final PmsPracticeApplicationService practiceService;
+    private final PmsPatientCareApplicationService patientCareService;
+    private final PmsPrescriptionApplicationService prescriptionService;
+    private final PmsBillingApplicationService billingService;
 
-    public PmsApplicationService(PmsCatalogApplicationService catalog,
-                                 PmsPracticeApplicationService practice,
-                                 PmsPatientCareApplicationService patientCare,
-                                 PmsPrescriptionApplicationService prescription,
-                                 PmsBillingApplicationService billing) {
-        this.catalog = catalog;
-        this.practice = practice;
-        this.patientCare = patientCare;
-        this.prescription = prescription;
-        this.billing = billing;
+    public PmsApplicationService(PmsCatalogApplicationService catalogService,
+                                 PmsPracticeApplicationService practiceService,
+                                 PmsPatientCareApplicationService patientCareService,
+                                 PmsPrescriptionApplicationService prescriptionService,
+                                 PmsBillingApplicationService billingService) {
+        this.catalogService = catalogService;
+        this.practiceService = practiceService;
+        this.patientCareService = patientCareService;
+        this.prescriptionService = prescriptionService;
+        this.billingService = billingService;
     }
 
     public String tenant(String region) {
@@ -52,234 +52,234 @@ public class PmsApplicationService {
     }
 
     public List<SpeciesView> species(String tenant) {
-        return catalog.species(tenant);
+        return catalogService.species(tenant);
     }
 
     public List<BreedView> breeds(String tenant, long speciesId) {
-        return catalog.breeds(tenant, speciesId);
+        return catalogService.breeds(tenant, speciesId);
     }
 
     public List<MedicationView> medications(String tenant) {
-        return catalog.medications(tenant);
+        return catalogService.medications(tenant);
     }
 
     public List<ClinicView> clinics(String tenant) {
-        return practice.clinics(tenant);
+        return practiceService.clinics(tenant);
     }
 
     public ClinicView clinic(String tenant, long id) {
-        return practice.clinic(tenant, id);
+        return practiceService.clinic(tenant, id);
     }
 
     public ClinicView createClinic(String tenant, ClinicRequest request) {
-        return practice.createClinic(tenant, request);
+        return practiceService.createClinic(tenant, request);
     }
 
     public ClinicView updateClinic(String tenant, long id, ClinicRequest request) {
-        return practice.updateClinic(tenant, id, request);
+        return practiceService.updateClinic(tenant, id, request);
     }
 
     public void deleteClinic(String tenant, long id) {
-        practice.deleteClinic(tenant, id);
+        practiceService.deleteClinic(tenant, id);
     }
 
     public List<StaffView> staffForClinic(String tenant, long clinicId) {
-        return practice.staffForClinic(tenant, clinicId);
+        return practiceService.staffForClinic(tenant, clinicId);
     }
 
     public List<StaffView> staff(String tenant) {
-        return practice.staff(tenant);
+        return practiceService.staff(tenant);
     }
 
     public StaffView staff(String tenant, long id) {
-        return practice.staff(tenant, id);
+        return practiceService.staff(tenant, id);
     }
 
     public StaffView createStaff(String tenant, long clinicId, StaffRequest request) {
-        return practice.createStaff(tenant, clinicId, request);
+        return practiceService.createStaff(tenant, clinicId, request);
     }
 
     public StaffView createStaff(String tenant, StaffRequest request) {
-        return practice.createStaff(tenant, request);
+        return practiceService.createStaff(tenant, request);
     }
 
     public StaffView updateStaff(String tenant, long id, StaffRequest request) {
-        return practice.updateStaff(tenant, id, request);
+        return practiceService.updateStaff(tenant, id, request);
     }
 
     public void deleteStaff(String tenant, long id) {
-        practice.deleteStaff(tenant, id);
+        practiceService.deleteStaff(tenant, id);
     }
 
     public List<ClientView> clients(String tenant, String query) {
-        return practice.clients(tenant, query);
+        return practiceService.clients(tenant, query);
     }
 
     public ClientView client(String tenant, long id) {
-        return practice.client(tenant, id);
+        return practiceService.client(tenant, id);
     }
 
     public ClientView createClient(String tenant, ClientRequest request) {
-        return practice.createClient(tenant, request);
+        return practiceService.createClient(tenant, request);
     }
 
     public ClientView updateClient(String tenant, long id, ClientRequest request) {
-        return practice.updateClient(tenant, id, request);
+        return practiceService.updateClient(tenant, id, request);
     }
 
     public void deleteClient(String tenant, long id) {
-        practice.deleteClient(tenant, id);
+        practiceService.deleteClient(tenant, id);
     }
 
     public List<PatientView> patients(String tenant, String microchip) {
-        return patientCare.patients(tenant, microchip);
+        return patientCareService.patients(tenant, microchip);
     }
 
     public PatientView patient(String tenant, long id) {
-        return patientCare.patient(tenant, id);
+        return patientCareService.patient(tenant, id);
     }
 
     public List<PatientView> patientsForClient(String tenant, long clientId) {
-        return patientCare.patientsForClient(tenant, clientId);
+        return patientCareService.patientsForClient(tenant, clientId);
     }
 
     public PatientView createPatientForClient(String tenant, long clientId, PatientRequest request) {
-        return patientCare.createPatientForClient(tenant, clientId, request);
+        return patientCareService.createPatientForClient(tenant, clientId, request);
     }
 
     public PatientView createPatient(String tenant, PatientRequest request) {
-        return patientCare.createPatient(tenant, request);
+        return patientCareService.createPatient(tenant, request);
     }
 
     public PatientView updatePatient(String tenant, long id, PatientRequest request) {
-        return patientCare.updatePatient(tenant, id, request);
+        return patientCareService.updatePatient(tenant, id, request);
     }
 
     public PatientView transferPatientToClinic(String tenant, long patientId, long clinicId) {
-        return patientCare.transferPatientToClinic(tenant, patientId, clinicId);
+        return patientCareService.transferPatientToClinic(tenant, patientId, clinicId);
     }
 
     public void deletePatient(String tenant, long id) {
-        patientCare.deletePatient(tenant, id);
+        patientCareService.deletePatient(tenant, id);
     }
 
     public List<HistoryView> history(String tenant, long patientId) {
-        return patientCare.history(tenant, patientId);
+        return patientCareService.history(tenant, patientId);
     }
 
     public HistoryView addHistory(String tenant, long patientId, HistoryRequest request) {
-        return patientCare.addHistory(tenant, patientId, request);
+        return patientCareService.addHistory(tenant, patientId, request);
     }
 
     public HistoryView historyEntry(String tenant, long patientId, long entryId) {
-        return patientCare.historyEntry(tenant, patientId, entryId);
+        return patientCareService.historyEntry(tenant, patientId, entryId);
     }
 
     public List<VisitView> visits(String tenant) {
-        return patientCare.visits(tenant);
+        return patientCareService.visits(tenant);
     }
 
     public VisitView visit(String tenant, long id) {
-        return patientCare.visit(tenant, id);
+        return patientCareService.visit(tenant, id);
     }
 
     public List<VisitView> visitsForPatient(String tenant, long patientId) {
-        return patientCare.visitsForPatient(tenant, patientId);
+        return patientCareService.visitsForPatient(tenant, patientId);
     }
 
     public VisitView createVisitForPatient(String tenant, long patientId, VisitRequest request) {
-        return patientCare.createVisitForPatient(tenant, patientId, request);
+        return patientCareService.createVisitForPatient(tenant, patientId, request);
     }
 
     public VisitView createVisit(String tenant, VisitRequest request) {
-        return patientCare.createVisit(tenant, request);
+        return patientCareService.createVisit(tenant, request);
     }
 
     public VisitView updateVisit(String tenant, long id, VisitRequest request) {
-        return patientCare.updateVisit(tenant, id, request);
+        return patientCareService.updateVisit(tenant, id, request);
     }
 
     public VisitView transitionVisit(String tenant, long id, String targetStatus) {
-        return patientCare.transitionVisit(tenant, id, targetStatus);
+        return patientCareService.transitionVisit(tenant, id, targetStatus);
     }
 
     public void deleteVisit(String tenant, long id) {
-        patientCare.deleteVisit(tenant, id);
+        patientCareService.deleteVisit(tenant, id);
     }
 
     public List<PrescriptionView> prescriptions(String tenant) {
-        return prescription.prescriptions(tenant);
+        return prescriptionService.prescriptions(tenant);
     }
 
     public PrescriptionView prescription(String tenant, long id) {
-        return prescription.prescription(tenant, id);
+        return prescriptionService.prescription(tenant, id);
     }
 
     public List<PrescriptionView> prescriptionsForVisit(String tenant, long visitId) {
-        return prescription.prescriptionsForVisit(tenant, visitId);
+        return prescriptionService.prescriptionsForVisit(tenant, visitId);
     }
 
     public PrescriptionView createPrescriptionForVisit(String tenant, long visitId, PrescriptionRequest request) {
-        return prescription.createPrescriptionForVisit(tenant, visitId, request);
+        return prescriptionService.createPrescriptionForVisit(tenant, visitId, request);
     }
 
     public PrescriptionView createPrescription(String tenant, PrescriptionRequest request) {
-        return prescription.createPrescription(tenant, request);
+        return prescriptionService.createPrescription(tenant, request);
     }
 
     public PrescriptionView updatePrescription(String tenant, long id, PrescriptionRequest request) {
-        return prescription.updatePrescription(tenant, id, request);
+        return prescriptionService.updatePrescription(tenant, id, request);
     }
 
     public void deletePrescription(String tenant, long id) {
-        prescription.deletePrescription(tenant, id);
+        prescriptionService.deletePrescription(tenant, id);
     }
 
     public List<PrescriptionItemView> prescriptionItems(String tenant, long prescriptionId) {
-        return prescription.prescriptionItems(tenant, prescriptionId);
+        return prescriptionService.prescriptionItems(tenant, prescriptionId);
     }
 
     public PrescriptionItemView addPrescriptionItem(String tenant, long prescriptionId,
                                                      PrescriptionItemRequest request) {
-        return prescription.addPrescriptionItem(tenant, prescriptionId, request);
+        return prescriptionService.addPrescriptionItem(tenant, prescriptionId, request);
     }
     public List<InvoiceView> invoices(String tenant, String status) {
-        return billing.invoices(tenant, status);
+        return billingService.invoices(tenant, status);
     }
 
     public InvoiceView invoice(String tenant, long id) {
-        return billing.invoice(tenant, id);
+        return billingService.invoice(tenant, id);
     }
 
     public InvoiceView createInvoice(String tenant, InvoiceRequest request) {
-        return billing.createInvoice(tenant, request);
+        return billingService.createInvoice(tenant, request);
     }
 
     public InvoiceView updateInvoice(String tenant, long id, InvoiceRequest request) {
-        return billing.updateInvoice(tenant, id, request);
+        return billingService.updateInvoice(tenant, id, request);
     }
 
     public InvoiceView issueInvoice(String tenant, long id) {
-        return billing.issueInvoice(tenant, id);
+        return billingService.issueInvoice(tenant, id);
     }
 
     public InvoiceView voidInvoice(String tenant, long id) {
-        return billing.voidInvoice(tenant, id);
+        return billingService.voidInvoice(tenant, id);
     }
 
     public void deleteInvoice(String tenant, long id) {
-        billing.deleteInvoice(tenant, id);
+        billingService.deleteInvoice(tenant, id);
     }
 
     public List<PaymentView> paymentsForInvoice(String tenant, long invoiceId) {
-        return billing.paymentsForInvoice(tenant, invoiceId);
+        return billingService.paymentsForInvoice(tenant, invoiceId);
     }
 
     public PaymentView paymentForInvoice(String tenant, long invoiceId, long paymentId) {
-        return billing.paymentForInvoice(tenant, invoiceId, paymentId);
+        return billingService.paymentForInvoice(tenant, invoiceId, paymentId);
     }
 
     public PaymentView addPayment(String tenant, long invoiceId, PaymentRequest request) {
-        return billing.addPayment(tenant, invoiceId, request);
+        return billingService.addPayment(tenant, invoiceId, request);
     }
 }
