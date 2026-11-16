@@ -5,6 +5,7 @@ import com.vetsync.pms.adapter.in.web.dto.PaymentDto.PaymentRequest;
 import com.vetsync.pms.adapter.out.persistence.entity.ClinicEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.ClientEntity;
 import com.vetsync.pms.adapter.out.persistence.entity.InvoiceEntity;
+import com.vetsync.pms.adapter.out.persistence.entity.PaymentEntity;
 import com.vetsync.pms.adapter.out.persistence.repository.BreedRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.ClinicRepository;
 import com.vetsync.pms.adapter.out.persistence.repository.ClientRepository;
@@ -65,9 +66,15 @@ class PmsApplicationServiceBehaviorTests {
 
     @BeforeEach
     void setUp() {
-        service = new PmsApplicationService(clinics, staff, clients, patients, visits, prescriptions,
-                invoices, medications, payments, history, prescriptionItems, species, breeds,
-                Clock.fixed(NOW, ZoneOffset.UTC));
+        Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+        service = new PmsApplicationService(
+                new PmsCatalogApplicationService(species, breeds, medications),
+                new PmsPracticeApplicationService(clinics, staff, clients, clock),
+                new PmsPatientCareApplicationService(clinics, staff, clients, patients, visits,
+                        history, species, breeds, clock),
+                new PmsPrescriptionApplicationService(prescriptions, prescriptionItems, medications,
+                        patients, visits, staff, clock),
+                new PmsBillingApplicationService(invoices, payments, clinics, clients, visits, clock));
     }
 
     @Test
@@ -171,6 +178,138 @@ class PmsApplicationServiceBehaviorTests {
 
         verify(invoices, never()).saveAndFlush(any());
         assertThat(invoice.getStatus()).isEqualTo(InvoiceEntity.InvoiceStatus.PARTIALLY_PAID);
+    }
+
+    @Test
+    void givenAnInvoiceWithNoPaymentsWhenUpdatedWithAPaidAmountThenTheRequestIsRejected() {
+        InvoiceEntity invoice = invoice(10L, InvoiceEntity.InvoiceStatus.DRAFT, "100.00", "0.00");
+        when(invoices.findByTenantIdAndId("SW", 10L)).thenReturn(Optional.of(invoice));
+        InvoiceRequest request = new InvoiceRequest(1L, 2L, null, "INV-TEST", "DRAFT",
+                invoice.getIssuedOn(), invoice.getDueOn(), "EUR",
+                new BigDecimal("100.00"), new BigDecimal("1.00"));
+
+        assertThatThrownBy(() -> service.updateInvoice("SW", 10L, request))
+                .isInstanceOf(PmsInvalidRequestException.class)
+                .hasMessage("paidAmount is managed through payment registration");
+
+        verify(invoices, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void givenAnInvoiceWhenIssuedAgainOrIssuedFromAnInvalidStateThenOnlyTheExistingIssueIsReturned() {
+        InvoiceEntity issued = invoice(10L, InvoiceEntity.InvoiceStatus.ISSUED, "100.00", "0.00");
+        InvoiceEntity voided = invoice(11L, InvoiceEntity.InvoiceStatus.VOID, "100.00", "0.00");
+        when(invoices.findByTenantIdAndId("SW", 10L)).thenReturn(Optional.of(issued));
+        when(invoices.findByTenantIdAndId("SW", 11L)).thenReturn(Optional.of(voided));
+
+        assertThat(service.issueInvoice("SW", 10L).status()).isEqualTo("ISSUED");
+        assertThatThrownBy(() -> service.issueInvoice("SW", 11L))
+                .isInstanceOf(PmsInvalidRequestException.class)
+                .hasMessage("Only unpaid draft invoices can be issued");
+
+        verify(invoices, never()).saveAndFlush(issued);
+    }
+
+    @Test
+    void givenADraftInvoiceWhenVoidedThenRepeatedVoidIsIdempotent() {
+        InvoiceEntity draft = invoice(10L, InvoiceEntity.InvoiceStatus.DRAFT, "100.00", "0.00");
+        InvoiceEntity invalidPaid = invoice(11L, InvoiceEntity.InvoiceStatus.PAID, "100.00", "0.00");
+        when(invoices.findByTenantIdAndId("SW", 10L)).thenReturn(Optional.of(draft));
+        when(invoices.findByTenantIdAndId("SW", 11L)).thenReturn(Optional.of(invalidPaid));
+        when(invoices.saveAndFlush(draft)).thenReturn(draft);
+
+        assertThat(service.voidInvoice("SW", 10L).status()).isEqualTo("VOID");
+        assertThat(service.voidInvoice("SW", 10L).status()).isEqualTo("VOID");
+        assertThatThrownBy(() -> service.voidInvoice("SW", 11L))
+                .isInstanceOf(PmsInvalidRequestException.class)
+                .hasMessage("Only draft or unpaid issued invoices can be voided");
+
+        verify(invoices).saveAndFlush(draft);
+    }
+
+    @Test
+    void givenAPaymentFromAnotherInvoiceWhenFetchedThenItIsNotReturned() {
+        InvoiceEntity otherInvoice = invoice(11L, InvoiceEntity.InvoiceStatus.ISSUED, "100.00", "0.00");
+        PaymentEntity payment = new PaymentEntity("SW", otherInvoice, NOW,
+                new BigDecimal("10.00"), PaymentEntity.PaymentMethod.CARD);
+        ReflectionTestUtils.setField(payment, "id", 30L);
+        when(payments.findByTenantIdAndId("SW", 30L)).thenReturn(Optional.of(payment));
+
+        assertThatThrownBy(() -> service.paymentForInvoice("SW", 10L, 30L))
+                .isInstanceOf(PmsResourceNotFoundException.class)
+                .hasMessage("Payment does not belong to invoice");
+    }
+
+    @Test
+    void givenADraftInvoiceWhenPaymentIsAddedThenTheRequestIsRejected() {
+        InvoiceEntity draft = invoice(10L, InvoiceEntity.InvoiceStatus.DRAFT, "100.00", "0.00");
+        when(invoices.findByTenantIdAndId("SW", 10L)).thenReturn(Optional.of(draft));
+
+        assertThatThrownBy(() -> service.addPayment("SW", 10L,
+                new PaymentRequest(NOW, new BigDecimal("10.00"), "CARD")))
+                .isInstanceOf(PmsInvalidRequestException.class)
+                .hasMessage("Payments can only be registered for issued invoices");
+
+        verify(payments, never()).save(any());
+    }
+
+    @Test
+    void givenAValidInvoiceRequestWhenCreatedThenItIsPersisted() {
+        ClinicEntity clinic = clinic(1L);
+        ClientEntity client = new ClientEntity("SW", clinic, "Synthetic", "Owner",
+                null, null, null, null, null, null);
+        ReflectionTestUtils.setField(client, "id", 2L);
+        when(clinics.findByTenantIdAndId("SW", 1L)).thenReturn(Optional.of(clinic));
+        when(clients.findByTenantIdAndId("SW", 2L)).thenReturn(Optional.of(client));
+        when(invoices.save(any())).thenAnswer(invocation -> {
+            InvoiceEntity saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 12L);
+            return saved;
+        });
+        InvoiceRequest request = new InvoiceRequest(1L, 2L, null, "INV-TEST", "DRAFT",
+                LocalDate.parse("2026-09-30"), LocalDate.parse("2026-10-14"), null,
+                new BigDecimal("100.00"), BigDecimal.ZERO);
+
+        var created = service.createInvoice("SW", request);
+
+        assertThat(created.id()).isEqualTo(12L);
+        assertThat(created.currency()).isEqualTo("EUR");
+    }
+
+    @Test
+    void givenAnInvoiceWithPaidAmountAboveItsTotalWhenCreatedThenItIsRejected() {
+        ClinicEntity clinic = clinic(1L);
+        ClientEntity client = new ClientEntity("SW", clinic, "Synthetic", "Owner",
+                null, null, null, null, null, null);
+        when(clinics.findByTenantIdAndId("SW", 1L)).thenReturn(Optional.of(clinic));
+        when(clients.findByTenantIdAndId("SW", 2L)).thenReturn(Optional.of(client));
+        InvoiceRequest request = new InvoiceRequest(1L, 2L, null, "INV-TEST", "DRAFT",
+                LocalDate.parse("2026-09-30"), LocalDate.parse("2026-10-14"), "EUR",
+                new BigDecimal("100.00"), new BigDecimal("101.00"));
+
+        assertThatThrownBy(() -> service.createInvoice("SW", request))
+                .isInstanceOf(PmsInvalidRequestException.class)
+                .hasMessage("paidAmount must not exceed totalAmount");
+
+        verify(invoices, never()).save(any());
+    }
+
+    @Test
+    void givenAnUnsettledPaidInvoiceWhenCreatedThenItIsRejected() {
+        ClinicEntity clinic = clinic(1L);
+        ClientEntity client = new ClientEntity("SW", clinic, "Synthetic", "Owner",
+                null, null, null, null, null, null);
+        when(clinics.findByTenantIdAndId("SW", 1L)).thenReturn(Optional.of(clinic));
+        when(clients.findByTenantIdAndId("SW", 2L)).thenReturn(Optional.of(client));
+        InvoiceRequest request = new InvoiceRequest(1L, 2L, null, "INV-TEST", "PAID",
+                LocalDate.parse("2026-09-30"), LocalDate.parse("2026-10-14"), "EUR",
+                new BigDecimal("100.00"), new BigDecimal("50.00"));
+
+        assertThatThrownBy(() -> service.createInvoice("SW", request))
+                .isInstanceOf(PmsInvalidRequestException.class)
+                .hasMessage("A paid invoice must be fully settled");
+
+        verify(invoices, never()).save(any());
     }
 
     @Test
