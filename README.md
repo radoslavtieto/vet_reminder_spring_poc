@@ -202,7 +202,7 @@ See the [PMS API test guide](services/pms-api/docs/testing.md) for VS Code test 
 Testcontainers-based tests need a running Docker daemon in either IDE.
 
 - **Visual Studio Code:** Open the Java Testing view (the beaker icon) and run a test, test class, or all tests. The workspace configuration in `.vscode/settings.json` already sets `-Dapi.version=1.44` for Java tests.
-- **IntelliJ IDEA:** Open **Run > Edit Configurations**, select the JUnit run configuration (or the JUnit template for future configurations), and add `-Dapi.version=1.44` to **VM options**. Run the desired test, class, or package from the gutter or the Run window. The Maven command-line property does not automatically apply to IDE-launched tests.
+- **IntelliJ IDEA:** The shared `PmsDatabaseIntegrationTests` configuration in `.run/` includes `-Dapi.version=1.44`; select it from the run-configuration list to run that class. For other Testcontainers tests launched from the gutter or another JUnit configuration, add `-Dapi.version=1.44` to **VM options**. The Maven command-line property does not automatically apply to IDE-launched tests.
 
 ### Run the PMS API locally
 

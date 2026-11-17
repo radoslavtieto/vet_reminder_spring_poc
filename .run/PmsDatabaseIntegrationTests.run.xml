@@ -1,0 +1,12 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="PmsDatabaseIntegrationTests" type="JUnit" factoryName="JUnit">
+    <module name="pms-api" />
+    <option name="VM_PARAMETERS" value="-Dapi.version=1.44" />
+    <option name="PACKAGE_NAME" value="com.vetsync.pms.adapter.out.persistence" />
+    <option name="MAIN_CLASS_NAME" value="com.vetsync.pms.adapter.out.persistence.PmsDatabaseIntegrationTests" />
+    <option name="TEST_OBJECT" value="class" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

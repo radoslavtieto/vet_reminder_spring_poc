@@ -21,7 +21,7 @@ From the repository root, run all PMS API tests and build the required Maven mod
 `-Dapi.version=1.44` selects the Docker API version used by the workspace test configuration. `-am` also builds required reactor modules. Docker must be running for tests tagged `integration` or `e2e`.
 
 - **VS Code:** Open **Testing** (the beaker icon), expand the Java test tree, then run a class, method, or the full test suite. The workspace Java test settings pass the Docker API version property.
-- **IntelliJ IDEA:** Run a test, class, or package from the gutter or the Run window. For Testcontainers tests, set `-Dapi.version=1.44` in the JUnit run configuration's VM options.
+- **IntelliJ IDEA:** The shared `PmsDatabaseIntegrationTests` run configuration in `.run/` already sets `-Dapi.version=1.44`; select it from the run-configuration list to run this class. For other Testcontainers tests launched from the gutter or a separate JUnit configuration, set the same value in **VM options**.
 - **Maven output:** Surefire prints the test totals and failures in the terminal. Detailed reports are written under `services/pms-api/target/surefire-reports/`.
 
 To generate and open the JaCoCo HTML coverage report, run `verify` instead of `test`:
