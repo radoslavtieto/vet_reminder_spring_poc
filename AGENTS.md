@@ -18,6 +18,7 @@ The root `pom.xml` is the Maven reactor and includes the non-deployable `libs/sy
 - Inject `java.time.Clock` wherever domain behavior depends on current time. Do not call `Instant.now()` in domain code.
 - Keep APIs and event handling idempotent where delivery can be retried. Never advance sync progress before successful event publication.
 - Use synthetic data only. Never add real personal, clinical, credential, or customer data to code, tests, fixtures, logs, or documentation.
+- Follow `SECURITY.md` and apply secure-by-default practices: validate and sanitize untrusted input, keep authorization and ownership checks server-side, avoid logging secrets or sensitive data, and prefer least-privilege permissions and fail-safe defaults.
 - Do not hardcode secrets, environment-specific hostnames, or Azure resource identifiers. Use configuration and environment variables.
 - Do not deploy or provision Azure resources as part of ordinary code changes. Azure access, production actions, and changes with external side effects require explicit user approval.
 - Record non-trivial architecture choices in `docs/adr/` once that directory is established. Do not silently resolve decisions listed in README section 14.

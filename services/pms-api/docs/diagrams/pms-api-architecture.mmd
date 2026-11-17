@@ -1,0 +1,40 @@
+flowchart TD
+    subgraph Callers["API Clients"]
+        Client["HTTP callers"]
+    end
+    subgraph Web["Web and Security"]
+        Security["JWT role and tenant checks"]
+        Controllers["REST controllers"]
+        DTOs["Validated request and response DTOs"]
+        Errors["Problem detail error mapping"]
+    end
+    subgraph Application["Application"]
+        UseCases["PmsApplicationService business rules"]
+        Auth["PmsAuthenticationService"]
+    end
+    subgraph Persistence["Persistence Adapter"]
+        Repositories["Tenant-scoped JPA repositories"]
+        Entities["JPA entities"]
+        Migrations["Flyway migrations and SQL triggers"]
+    end
+    subgraph MySQL["MySQL"]
+        Business[("Business tables")]
+        Audit[("Audit stream tables")]
+    end
+    subgraph Reader["Downstream Reader"]
+        Sync["sync-service read-only poller"]
+    end
+
+    Client -->|"HTTP requests"| Security
+    Security -->|"authorized request"| Controllers
+    Controllers -->|"validates and maps"| DTOs
+    Controllers -->|"invokes use cases"| UseCases
+    Controllers -->|"login and user management"| Auth
+    UseCases -->|"tenant-scoped persistence"| Repositories
+    Auth -->|"user persistence"| Repositories
+    Repositories -->|"maps records"| Entities
+    Repositories -->|"SQL operations"| Business
+    Migrations -->|"creates schema and triggers"| Business
+    Business -->|"trigger changes"| Audit
+    Sync -->|"reads audit records"| Audit
+    Errors -.->|"maps request failures"| Controllers

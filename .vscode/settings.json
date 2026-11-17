@@ -1,3 +1,12 @@
 {
-    "java.compile.nullAnalysis.mode": "disabled"
+    "java.compile.nullAnalysis.mode": "disabled",
+    "java.test.config": [
+        {
+            "name": "Docker Engine 29",
+            "vmArgs": [
+                "-Dapi.version=1.44"
+            ]
+        }
+    ],
+    "java.test.defaultConfig": "Docker Engine 29"
 }
