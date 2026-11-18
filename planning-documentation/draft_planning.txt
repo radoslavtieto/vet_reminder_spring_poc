@@ -50,3 +50,9 @@ Spring boot event driven App that will:
  - it should convert it to its own domain data types - more of a sender data rather than deep pms specific data
  - it should store data to relevant Postgres database 
  -
+
+ TODO:
+ 1. Consider how to ensure ethical standards and data privacy in the synchronization process, especially when handling sensitive medical information.
+ 2. Implement necessary encryption and access control measures to protect patient data during transit and at rest.
+ 3. Add transparency features to allow patients and clinics to understand how their data is being used and synchronized across systems.
+ 4. Ensure compliance with relevant data protection regulations (e.g., GDPR) in the design and implementation of the synchronization tool.
