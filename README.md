@@ -179,7 +179,35 @@ Run all Docker Compose and Maven commands from the repository root. Start the Do
 
 ### Run the PMS API tests
 
-From the repository root, run the PMS API tests and build any required Maven modules with:
+Before running tests, start the Docker daemon. On Windows, start Docker Desktop; on Ubuntu, start the Docker Engine service.
+
+**Git Bash on Windows**
+
+```bash
+powershell.exe -NoProfile -Command 'Start-Process "$Env:ProgramFiles\Docker\Docker\Docker Desktop.exe"'
+```
+
+You can also start Docker Desktop from the Windows Start menu. Wait for it to finish starting before continuing.
+
+**Windows PowerShell**
+
+```powershell
+Start-Process "$Env:ProgramFiles\Docker\Docker\Docker Desktop.exe"
+```
+
+**Ubuntu / Bash**
+
+```bash
+sudo systemctl start docker
+```
+
+If Docker Desktop is installed in a non-default location, start it from the Start menu. From the terminal where you will run the tests, confirm Docker is ready:
+
+```bash
+docker info
+```
+
+If `docker info` reports a connection error, wait for Docker Desktop/Engine to finish starting or resolve the daemon connection before proceeding. From the repository root, run the PMS API tests and build any required Maven modules. The tests use Testcontainers to start their own MySQL containers, so do not start the local Compose services for this step.
 
 **Bash / Git Bash**
 
@@ -193,7 +221,7 @@ From the repository root, run the PMS API tests and build any required Maven mod
 .\mvnw.cmd -B '-Dapi.version=1.44' -pl services/pms-api -am test
 ```
 
-The `-Dapi.version=1.44` option selects the Docker API version required by Docker Engine 29, matching the workspace test configuration. The `-am` option also builds the modules required by `pms-api`. Tests that use Testcontainers require Docker to be running; you do not need to start the local Compose services separately.
+The `-Dapi.version=1.44` option selects the Docker API version required by Docker Engine 29, matching the workspace test configuration. The `-am` option also builds the modules required by `pms-api`. The local MySQL Compose service described below is for running the PMS API locally, not for these tests.
 
 See the [PMS API test guide](services/pms-api/docs/testing.md) for VS Code test discovery, JaCoCo reports, the current coverage inventory, and recommended follow-up tests.
 
@@ -206,7 +234,7 @@ Testcontainers-based tests need a running Docker daemon in either IDE.
 
 ### Run the PMS API locally
 
-The PMS API has its own MySQL Compose file; there is no aggregate Compose file. Run these commands from the repository root.
+The PMS API has its own MySQL Compose file; there is no aggregate Compose file. This local database is for running the API, not a prerequisite for the Testcontainers tests above. Run these commands from the repository root.
 
 1. Start the local MySQL database:
 
