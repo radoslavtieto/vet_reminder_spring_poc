@@ -1,0 +1,57 @@
+TODO 1 — Ethics and medical-data privacy
+• Apply data minimization: sync only fields needed by the Action Engine. Extend libs/sync-contracts and mapper tests if the payload currently contains unnecessary PMS data.
+• Require a documented purpose and consent/lawful-basis check before publishing client or patient events.
+• Add tenant isolation, least-privilege PMS read credentials, and audit logging for poll and sync access.
+• Record privacy and deletion decisions in a new ADR.
+
+Relevant code: sync-service, libs/sync-contracts, sync-service audit sources, pms-api client consent fields.
+Validation: Add tests proving that tenant mismatches, unconsented records, and data-minimized envelopes are rejected or excluded correctly.
+TODO 2 — Encryption and access control
+• Enable TLS for MySQL, PostgreSQL, MongoDB/Cosmos DB, RabbitMQ/Service Bus, and the public APIs.
+• Replace checked-in or environment-only database credentials with Azure Key Vault secrets and managed identities in UAT/PROD.
+• Enforce Azure storage/database encryption at rest and key rotation through the Azure platform.
+• Keep the existing JWT/RBAC implementation, but add refresh/rotation and service-to-service authentication policies.
+• Restrict audit-table access to a read-only sync-service database account.
+• Add encryption-related security configuration tests and reject insecure local/production configuration.
+
+Relevant code: service application.properties, Compose files, PmsSecurityConfiguration, infrastructure and deployment configuration.
+Validation: Configuration tests plus the service verification commands; verify TLS in deployed UAT and certificate/key rotation procedures.
+TODO 3 — Patient and clinic transparency
+• Add endpoints or UI/API resources showing:
+◦ Which data is collected and synchronized.
+◦ Source and destination systems.
+◦ Consent and synchronization status.
+◦ Last synchronization or error status.
+◦ Purpose of downstream processing.
+• Expose data-access and correction/history capabilities through PMS APIs.
+• Record a synchronization audit trail, while avoiding sensitive data inside logs or event metadata.
+
+Relevant code: PMS controllers/DTOs, Sync run-status repositories, Action Engine inbox records, OpenAPI configuration.
+Validation: Add API tests for tenant ownership, response contents, authorization, and no-sensitive-log assertions.
+TODO 4 — GDPR compliance
+• Define an actual records-retention schedule and implement purge/anonymization for MySQL, audit tables, MongoDB, PostgreSQL, RabbitMQ, Service Bus, and dead-letter queues.
+• Add consent withdrawal and data-erasure handling across all three services.
+• Implement export and correction workflows for data-subject rights.
+• Complete a DPIA with lawful basis, data flow, retention, processor, transfer, incident, and breach procedures.
+• Add privacy review items to data-contract changes and service-boundary documentation.
+• Decide whether gdpr_consent_at is sufficient or whether purpose, source, and revocation records are required.
+
+Relevant code: client domain/entity, sync payload mapping, audit streams, Action Engine soft-delete behavior, retention configuration.
+Validation: End-to-end tests for consent withdrawal, erasure, deletion propagation, retention purge, and legal hold exceptions.
+TODO 5 — Diligence/privacy statement
+• Add a concise privacy notice/diligence statement to API documentation and clinic-facing surfaces.
+• State the controller/processor roles, collected fields, purposes, lawful basis, retention period, third-party destinations, rights, and contact person.
+• Include a version and publication date so users can verify policy changes.
+• Link the notice to consent capture and synchronization-status features.
+• Have Bulgaria/GDPR counsel approve the final legal wording; do not invent or hardcode unsupported legal language.
+
+Relevant code: OpenAPI documentation, future clinic-facing or patient-facing endpoint, README.md or dedicated privacy documentation.
+Validation: Documentation review and tests confirming the notice is exposed and versioned, while no real personal data is used.
+
+Overall validation commands
+.\mvnw.cmd -B -pl services/pms-api -am verify
+.\mvnw.cmd -B -pl services/sync-service -am verify
+.\mvnw.cmd -B -pl services/action-engine -am verify
+.\mvnw.cmd -B clean verify
+
+The main open business decision is GDPR retention, consent semantics, lawful basis, and DSR responsibilities; those need clinic/privacy-owner approval and should become a recorded ADR before implementation.
