@@ -91,7 +91,7 @@ flowchart LR
 | Secrets | Azure Key Vault + managed identity | Never commit secrets. |
 | Observability | Micrometer + OpenTelemetry → Azure Application Insights | Correlation ID on every event. |
 
-**Test stack:** JUnit 5, AssertJ, Mockito, Testcontainers for the existing PMS/MySQL integration suite, and JaCoCo. Sync-contract serialization, poller behavior, and Action Engine mapping/inbox behavior have unit tests; broker-backed and PostgreSQL/MongoDB integration tests and contract compatibility tooling remain follow-up work (see D7).
+**Test stack:** JUnit 5, AssertJ, Mockito, Testcontainers, and JaCoCo. Sync-contract serialization, poller behavior, and Action Engine mapping/inbox behavior have unit tests; broker-backed and PostgreSQL/MongoDB integration tests and contract compatibility tooling remain follow-up work (see D7).
 
 ---
 
@@ -175,66 +175,17 @@ Configuration currently comes from environment variables referenced by each serv
 - JDK 21; the checked-in Maven Wrapper downloads and uses Maven 3.9.11
 - Docker with Docker Compose: Docker Desktop with WSL2 on Windows 11, or Docker Engine on Ubuntu
 
-Run all Docker Compose and Maven commands from the repository root. Start the Docker daemon before starting a Compose dependency. Use `./mvnw` in Bash, including Git Bash, or `.\mvnw.cmd` in Windows PowerShell; the wrapper downloads Maven 3.9.11 when needed. The PowerShell examples below are for Windows; the Bash examples are for Ubuntu or Git Bash. VS Code Test Explorer uses the workspace test configuration to pass Docker API version 1.44, which is required by Docker Engine 29.
+Run Docker Compose and Maven commands from the repository root. Start the Docker daemon before starting a Compose dependency. Use `./mvnw` in Bash, including Git Bash, or `.\mvnw.cmd` in Windows PowerShell; the wrapper downloads Maven 3.9.11 when needed. The PowerShell examples below are for Windows; the Bash examples are for Ubuntu or Git Bash.
 
-### Run the PMS API tests
+### Run tests
 
-Before running tests, start the Docker daemon. On Windows, start Docker Desktop; on Ubuntu, start the Docker Engine service.
-
-**Git Bash on Windows**
-
-```bash
-powershell.exe -NoProfile -Command 'Start-Process "$Env:ProgramFiles\Docker\Docker\Docker Desktop.exe"'
-```
-
-You can also start Docker Desktop from the Windows Start menu. Wait for it to finish starting before continuing.
-
-**Windows PowerShell**
-
-```powershell
-Start-Process "$Env:ProgramFiles\Docker\Docker\Docker Desktop.exe"
-```
-
-**Ubuntu / Bash**
-
-```bash
-sudo systemctl start docker
-```
-
-If Docker Desktop is installed in a non-default location, start it from the Start menu. From the terminal where you will run the tests, confirm Docker is ready:
-
-```bash
-docker info
-```
-
-If `docker info` reports a connection error, wait for Docker Desktop/Engine to finish starting or resolve the daemon connection before proceeding. From the repository root, run the PMS API tests and build any required Maven modules. The tests use Testcontainers to start their own MySQL containers, so do not start the local Compose services for this step.
-
-**Bash / Git Bash**
-
-```bash
-./mvnw -B -Dapi.version=1.44 -pl services/pms-api -am test
-```
-
-**Windows PowerShell**
-
-```powershell
-.\mvnw.cmd -B '-Dapi.version=1.44' -pl services/pms-api -am test
-```
-
-The `-Dapi.version=1.44` option selects the Docker API version required by Docker Engine 29, matching the workspace test configuration. The `-am` option also builds the modules required by `pms-api`. The local MySQL Compose service described below is for running the PMS API locally, not for these tests.
-
-See the [PMS API test guide](services/pms-api/docs/testing.md) for VS Code test discovery, JaCoCo reports, the current coverage inventory, and recommended follow-up tests.
-
-### Run tests from an IDE
-
-Testcontainers-based tests need a running Docker daemon in either IDE.
-
-- **Visual Studio Code:** Open the Java Testing view (the beaker icon) and run a test, test class, or all tests. The workspace configuration in `.vscode/settings.json` already sets `-Dapi.version=1.44` for Java tests.
-- **IntelliJ IDEA:** The shared `PmsDatabaseIntegrationTests` configuration in `.run/` includes `-Dapi.version=1.44`; select it from the run-configuration list to run that class. For other Testcontainers tests launched from the gutter or another JUnit configuration, add `-Dapi.version=1.44` to **VM options**. The Maven command-line property does not automatically apply to IDE-launched tests.
+Some integration tests use Testcontainers and require a running Docker daemon; local Compose services are started separately when needed by an application.
+For service-specific test commands, IDE configuration, and coverage instructions, see the relevant service test guide. 
+The [PMS API test guide](services/pms-api/docs/testing.md) covers the PMS API test suite.
 
 ### Run the PMS API locally
 
-The PMS API has its own MySQL Compose file; there is no aggregate Compose file. This local database is for running the API, not a prerequisite for the Testcontainers tests above. Run these commands from the repository root.
+The PMS API has its own MySQL Compose file; there is no aggregate Compose file. This local database is for running the API. Run these commands from the repository root.
 
 1. Start the local MySQL database:
 
@@ -810,6 +761,6 @@ These are deliberately flagged rather than decided silently. Turn each into an A
 | D10 | Delete semantics | **Resolved for the first slice: archive mapped records** | A source `DELETE` event sets Action Engine `active=false`; physical deletion/retention is not implemented. Revisit retention before production. |
 
 **Known constraints to remember**
-- Testcontainers requires Docker on both OSes (Docker Desktop + WSL2 on Windows 11).
+- Testcontainers-based tests require a running Docker daemon; see the service test guides for setup instructions.
 - Audit polling by auto-increment id needs the safety-lag mitigation (section 7.3).
 - Delivery is at-least-once end to end. Idempotency is a requirement, not an option.
