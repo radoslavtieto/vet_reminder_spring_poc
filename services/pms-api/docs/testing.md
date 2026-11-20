@@ -4,6 +4,36 @@ This guide describes the existing PMS API tests and the current gaps visible fro
 
 ## Run and display tests
 
+The integration tests use Testcontainers to start their own MySQL 8.4 containers. Start Docker Desktop on Windows or Docker Engine on Ubuntu and verify that the daemon is reachable before testing. You do not need to start the PMS API Compose database for the test suite.
+
+**Start Docker Desktop from Git Bash on Windows**
+
+```bash
+powershell.exe -NoProfile -Command 'Start-Process "$Env:ProgramFiles\Docker\Docker\Docker Desktop.exe"'
+```
+
+Alternatively, open Docker Desktop from the Windows Start menu. If it is installed in a non-default location, use the Start menu.
+
+**Start Docker Desktop from Windows PowerShell**
+
+```powershell
+Start-Process "$Env:ProgramFiles\Docker\Docker\Docker Desktop.exe"
+```
+
+**Start Docker Engine from Ubuntu / Bash**
+
+```bash
+sudo systemctl start docker
+```
+
+Wait for Docker Desktop or Docker Engine to finish starting. From the terminal where you will run tests, confirm the daemon is ready:
+
+```text
+docker info
+```
+
+If this reports a connection error, resolve the Docker daemon connection before proceeding.
+
 From the repository root, run all PMS API tests and build the required Maven modules:
 
 **Windows PowerShell**
@@ -18,10 +48,13 @@ From the repository root, run all PMS API tests and build the required Maven mod
 ./mvnw -B -Dapi.version=1.44 -pl services/pms-api -am test
 ```
 
-`-Dapi.version=1.44` selects the Docker API version used by the workspace test configuration. `-am` also builds required reactor modules. Docker must be running for tests tagged `integration` or `e2e`.
+`-Dapi.version=1.44` selects the Docker API version used by the workspace test configuration and is needed with Docker Engine 29. `-am` also builds required reactor modules.
 
 - **VS Code:** Open **Testing** (the beaker icon), expand the Java test tree, then run a class, method, or the full test suite. The workspace Java test settings pass the Docker API version property.
-- **IntelliJ IDEA:** The shared `PmsDatabaseIntegrationTests` run configuration in `.run/` already sets `-Dapi.version=1.44`; select it from the run-configuration list to run this class. For other Testcontainers tests launched from the gutter or a separate JUnit configuration, set the same value in **VM options**.
+- **IntelliJ IDEA:** For tests launched from the gutter or a JUnit configuration, add `-Dapi.version=1.44` to that configuration's **VM options**. 
+- To have newly created JUnit configurations inherit the option,- open **Run → Edit Configurations → Edit configuration templates → JUnit** 
+- and add it to **VM options**. Template changes do not affect existing configurations, so add it to the existing test-suite configuration as well. 
+- Then run the suite from the test tree or that configuration. Testcontainers starts its MySQL container automatically when the tests run.
 - **Maven output:** Surefire prints the test totals and failures in the terminal. Detailed reports are written under `services/pms-api/target/surefire-reports/`.
 
 To generate and open the JaCoCo HTML coverage report, run `verify` instead of `test`:
@@ -35,8 +68,6 @@ To generate and open the JaCoCo HTML coverage report, run `verify` instead of `t
 ```
 
 After a successful run, open `services/pms-api/target/site/jacoco/index.html` in a browser. JaCoCo's Maven `check` also enforces at least 90% line coverage for `PmsApplicationService`. This is a class-specific threshold, not a claim that the entire API or every endpoint has 90% coverage.
-
-The verification run for this documentation change measured 91.69% line coverage for `PmsApplicationService` (353 of 385 lines).
 
 ## Current coverage
 
