@@ -8,7 +8,7 @@ This repository contains three independently deployable Java 21 / Spring Boot 3.
 - `services/sync-service`: reads PMS data and audit streams, tracks synchronization state, and publishes events.
 - `services/action-engine`: consumes published events and owns its domain, persistence, rules, and dispatch.
 
-The root `pom.xml` is the Maven reactor and includes the non-deployable `libs/sync-contracts` module. Service-local Compose files provide MySQL, MongoDB, RabbitMQ, PostgreSQL, and Mailpit; there is no aggregate local stack. The Maven Wrapper is not present. Terraform provides an Azure infrastructure scaffold but does not deploy the application containers. Local RabbitMQ is implemented; the production Azure Service Bus adapter remains open.
+The root `pom.xml` is the Maven reactor and includes the non-deployable `libs/sync-contracts` module. Service-local Compose files provide MySQL, MongoDB, RabbitMQ, PostgreSQL, and Mailpit; there is no aggregate local stack. The Maven Wrapper (`mvnw`, `mvnw.cmd`, `.mvn/wrapper/`) is present at the root. Terraform provides an Azure infrastructure scaffold but does not deploy the application containers. Local RabbitMQ is implemented; the production Azure Service Bus adapter remains open.
 
 ## Engineering rules
 
