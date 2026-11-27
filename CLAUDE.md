@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+@AGENTS.md
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 `AGENTS.md` holds the engineering rules (TDD, module boundaries, `Clock` injection, synthetic data, no Azure deployment without approval). Follow it. This file covers commands and the cross-service structure that `AGENTS.md` does not.
